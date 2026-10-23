@@ -20,6 +20,11 @@
   --leiste-bg: color-mix(in srgb, var(--bg-2) 85%, transparent);
   /* tatsächliche Höhe der festen Kopfleiste samt Safe-Area oben; app.js (kopfHoeheMessen) überschreibt sie mit dem Messwert, z. B. bei großer Schrift */
   --kopf-ist: calc(var(--kopf-hoehe) + var(--safe-top));
+  /* Warn-Symbol in der Kopfleiste je Stufe (1–4): Symbol mindestens 3:1 auf --leiste-bg */
+  --warn-sym-1: color-mix(in srgb, var(--gelb) 60%, var(--label));
+  --warn-sym-2: color-mix(in srgb, var(--orange) 75%, var(--label));
+  --warn-sym-3: var(--rot);
+  --warn-sym-4: color-mix(in srgb, var(--rot) 75%, var(--label));
 }
 @media (prefers-reduced-transparency: reduce) {
   :root { --leiste-bg: var(--bg-2); }   /* ohne Transparenz ganz deckend */
@@ -72,6 +77,15 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible, a:focus-vis
   color: var(--akzent); border-radius: var(--r-button);
   transition: opacity var(--dauer) var(--ease), transform var(--dauer) var(--ease);
 }
+.kopf-warnung[data-stufe="1"] { color: var(--warn-sym-1); }
+.kopf-warnung[data-stufe="2"] { color: var(--warn-sym-2); }
+.kopf-warnung[data-stufe="3"] { color: var(--warn-sym-3); }
+.kopf-warnung[data-stufe="4"] { color: var(--warn-sym-4); }
+.kopf-warnung[hidden] { display: none; }
+.kopf.mit-warnung { grid-template-columns: auto auto minmax(0, 1fr) auto auto; }
+.kopf-warnung.wackelt { animation: warn-wackeln 600ms ease-in-out 1; }
+@keyframes warn-wackeln { 0%, 100% { transform: rotate(0deg); } 12% { transform: rotate(-8deg); } 37% { transform: rotate(8deg); } 62% { transform: rotate(-8deg); } 87% { transform: rotate(8deg); } }
+@keyframes warn-einblenden { from { opacity: 0; } }
 .kopf-knopf svg, .zeile-ikon svg { inline-size: var(--ikon-groesse); block-size: var(--ikon-groesse); }
 .kopf-knopf:active { opacity: .6; transform: scale(.97); }
 .kopf-mitte { min-inline-size: 0; text-align: center; line-height: 1.15; padding-block: var(--s1); }
@@ -303,6 +317,7 @@ html[data-schrift="150"] .segment { flex-wrap: wrap; }
 @media (prefers-reduced-motion: reduce) {
   .blatt { animation: blatt-einblenden 160ms linear; }
   .reiter:not(#reiter-graphs):not(#reiter-karte):not([hidden]) { animation-duration: 160ms; }
+  .kopf-warnung.wackelt { animation: warn-einblenden 200ms linear 1; }
   .kopf-knopf, .tabbar-huelle .tabbar button, .knopf-leise, .knopf-akzent, .blatt-fertig, .segment button, .schalter-knauf { transition: opacity 160ms linear; transform: none !important; }
   .schalter[aria-checked="true"] .schalter-knauf { transform: translateX(calc(var(--schalter-breite) - var(--schalter-knauf) - 4px)) !important; }
   @keyframes blatt-einblenden { from { opacity: 0; } }

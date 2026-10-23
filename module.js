@@ -333,29 +333,92 @@
       '<text class="ring-zahl" x="' + c + '" y="' + c + '">' + (s.stufe ? Math.round(aqi) : '–') + '</text></svg>';
   }
 
-  function modWarnung(daten) {
-    var w = (daten.warnungen || []).slice();
-    if (!w.length) return '';
-    var off = offsetVon(daten);
-    w.sort(function (a, b) { return (SEV[b.severity] || [1])[0] - (SEV[a.severity] || [1])[0]; });
-    var erste = w[0], st = SEV[erste.severity] || SEV.minor;
+  // ---------- Warnung: Rechnen (Auswahl, Weg-Liste, Texte) ----------
+  var WEG_SCHLUESSEL = 'warnung-weg';
+  function warnId(w) { var i = w && (w.id != null ? w.id : w.alert_id); return i == null ? '' : String(i); }
+  function warnStufe(w) { return (SEV[w && w.severity] || SEV.minor)[0]; }
+  // Art der Warnung in normaler Schreibweise: „WINDBÖEN“ → „Windböen“
+  R.warnArt = function (w) {
+    var t = String((w && (w.event_de || w.event)) || '').trim().toLowerCase();
+    return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Wetter';
+  };
+  R.warnTitel = function (w) { return 'Warnung vor ' + R.warnArt(w); };
+  // „bis Sa. 04:00“ (Ortszeit) oder ''
+  function warnBis(w, offset) {
+    var b = Date.parse(w && w.expires);
+    return isNaN(b) ? '' : 'bis ' + tagZeit(b, offset);
+  }
+  R.warnKurz = function (w, offset) {
+    var t = ['Stufe ' + warnStufe(w) + ' von 4', R.warnArt(w)], bis = warnBis(w, offset);
+    if (bis) t.push(bis);
+    return t.join(' · ');
+  };
+  function satzEnde(t) { t = String(t || '').replace(/\s+/g, ' ').trim(); return t && !/[.!?]$/.test(t) ? t + '.' : t; }
+  function ersteGross(t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : t; }
+  // DWD-Text „Hinweis auf: … Handlungsempfehlungen: …“ → { achte: 'Achte auf: …', empfehlung: '…' }, ohne Quell-Präfixe
+  R.warnTipp = function (text) {
+    var t = String(text || ''), teile = t.split(/Handlungsempfehlungen:/i), achte = '', emp = teile[teile.length - 1];
+    if (teile.length > 1) achte = teile[0].replace(/^\s*Hinweis auf:/i, '').replace(/\s+/g, ' ').trim();
+    else emp = t.replace(/^\s*Hinweis auf:/i, '');
+    return { achte: achte ? 'Achte auf: ' + satzEnde(achte) : '', empfehlung: ersteGross(satzEnde(emp)) };
+  };
+  // Weg-Liste: [{ id, expires }]; abgelaufene (expires < ms) fliegen raus
+  R.wegAufraeumen = function (liste, ms) {
+    return (Array.isArray(liste) ? liste : []).filter(function (x) { return x && x.id != null && Date.parse(x.expires) >= ms; });
+  };
+  R.wegMerken = function (liste, w, ms) {
+    var id = warnId(w), l = R.wegAufraeumen(liste, ms), e = w && w.expires;
+    if (!id) return l;
+    if (isNaN(Date.parse(e))) e = new Date(ms + 24 * 36e5).toISOString();   // ohne Ende: 24 Stunden merken
+    if (!l.some(function (x) { return String(x.id) === id; })) l.push({ id: id, expires: e });
+    return l;
+  };
+  R.wegEntfernen = function (liste, ids) {
+    return (Array.isArray(liste) ? liste : []).filter(function (x) { return ids.indexOf(String(x.id)) < 0; });
+  };
+  // Welche Warnung zeigt die Kachel? Schwerste nicht weggeklickte; sind alle weggeklickt, bleibt nur der ⚠️-Knopf (erste = schwerste)
+  R.warnAuswahl = function (warnungen, weg, ms) {
+    var w = (Array.isArray(warnungen) ? warnungen : []).slice(), ids = R.wegAufraeumen(weg, ms).map(function (x) { return String(x.id); });
+    w.sort(function (a, b) { return warnStufe(b) - warnStufe(a); });
+    var offen = w.filter(function (x) { return ids.indexOf(warnId(x)) < 0; });
+    if (offen.length) return { zeigen: true, erste: offen[0], weitere: offen.slice(1), alle: w };
+    return { zeigen: false, erste: w[0] || null, weitere: [], alle: w };
+  };
+
+  // ---------- Zeichnen: Warnung ----------
+  // Dreieck mit Ausrufezeichen im Stil von ikonen.js (auch für den Knopf in der Kopfleiste)
+  function warnSymbol() {
+    return '<svg class="ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 2.4 17.6A2 2 0 0 0 4.1 20.6h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/></svg>';
+  }
+  function wegListe(daten) { return WL.merk(WEG_SCHLUESSEL); }
+  // auf: Kachel aufgeklappt zeichnen (nach Tipp auf das ⚠️ in der Kopfleiste)
+  function modWarnung(daten, auf) {
+    var a = R.warnAuswahl(daten.warnungen, wegListe(daten), jetztMs(daten));
+    if (!a.zeigen) return '';
+    var off = offsetVon(daten), erste = a.erste, w = a.weitere, st = SEV[erste.severity] || SEV.minor;
     function zeitraum(x) {
-      var a = Date.parse(x.onset), b = Date.parse(x.expires);
-      if (isNaN(a)) return '';
-      return isNaN(b) ? 'ab ' + tagZeit(a, off) + ' Uhr' : tagZeit(a, off) + ' Uhr bis ' + tagZeit(b, off) + ' Uhr';
+      var s = Date.parse(x.onset), b = Date.parse(x.expires);
+      if (isNaN(s)) return '';
+      return isNaN(b) ? 'ab ' + tagZeit(s, off) + ' Uhr' : tagZeit(s, off) + ' Uhr bis ' + tagZeit(b, off) + ' Uhr';
     }
-    var html = '<p class="warn-titel">' + esc(erste.headline_de || erste.event || st[1]) + '</p>' +
+    var tipp = R.warnTipp(erste.instruction_de);
+    var inhalt = '<button type="button" class="warn-x" data-aktion="warnung-weg" aria-label="Warnung ausblenden">' + ikon('x') + '</button>' +
+      '<h2 class="warn-titel" id="m-warnung-t">' + esc(R.warnTitel(erste)) + '</h2>' +
       '<p class="warn-meta">' + esc(daten.ort.name) + (zeitraum(erste) ? ' · ' + esc(zeitraum(erste)) : '') + '</p>' +
       (erste.description_de ? '<p class="warn-text">' + esc(erste.description_de) + '</p>' : '') +
-      (erste.instruction_de ? '<p class="warn-tipp"><strong>Das hilft: </strong>' + esc(erste.instruction_de) + '</p>' : '');
-    if (w.length > 1) {
-      html += '<ul class="warn-weitere">' + w.slice(1, 4).map(function (x) {
+      (tipp.achte ? '<p class="warn-tipp">' + esc(tipp.achte) + '</p>' : '') +
+      (tipp.empfehlung ? '<p class="warn-tipp">' + esc(tipp.empfehlung) + '</p>' : '');
+    if (w.length) {
+      inhalt += '<ul class="warn-weitere">' + w.slice(0, 3).map(function (x) {
         var s2 = SEV[x.severity] || SEV.minor;
-        return '<li><strong>' + esc(s2[1]) + ':</strong> ' + esc(x.event || x.headline_de || '') + (zeitraum(x) ? ' · ' + esc(zeitraum(x)) : '') + '</li>';
+        return '<li><strong>' + esc(s2[1]) + ':</strong> ' + esc(R.warnArt(x)) + (zeitraum(x) ? ' · ' + esc(zeitraum(x)) : '') + '</li>';
       }).join('') + '</ul>';
     }
-    html += '<p class="fuss">Quelle: DWD über Bright Sky</p>';
-    return kachel('k-warnung warn-' + st[0], 'm-warnung', st[1], html, '<span class="pille">Stufe ' + st[0] + ' von 4</span>');
+    inhalt += '<p class="fuss">Quelle: DWD über Bright Sky</p>';
+    return '<section class="kachel k-warnung warn-' + st[0] + '" aria-label="Wetterwarnung" data-ids="' + esc(a.alle.map(warnId).join(',')) + '">' +
+      '<button type="button" class="warn-zeile" aria-expanded="' + (auf ? 'true' : 'false') + '" aria-controls="m-warnung-inhalt" data-aktion="warnung-auf">' +
+      '<span class="warn-sym">' + warnSymbol() + '</span><span class="warn-kurz">' + esc(R.warnKurz(erste, off)) + '</span><span class="warn-chev">' + ikon('chevdown') + '</span></button>' +
+      '<div class="warn-inhalt" id="m-warnung-inhalt"' + (auf ? '' : ' hidden') + '>' + inhalt + '</div></section>';
   }
 
   function modAktuell(daten) {
@@ -576,7 +639,10 @@
   ];
   var MODUL_NAMEN = { aktuell: 'Aktuell', stunden: 'Stunden', meteogramm: 'Meteogramm', tage: 'Tagesliste', luft: 'Luftqualität', tipps: 'Was heute geht', sonne: 'Sonne', mond: 'Mond', wind: 'Wind', radar: 'Regenradar', pollen: 'Pollen' };
   var M = {};
-  M.rechnen = { mond: R.mond, tipps: R.tipps, regenSatz: R.regenSatz, stundenIndizes: R.stundenIndizes, luftTage: R.luftTage, pollenMorgen: R.pollenMorgen, hauptphasen: R.hauptphasen, trockenBis: R.trockenBis, gezeiten: R.gezeiten, balkenHoehe: R.balkenHoehe };
+  M.rechnen = { mond: R.mond, tipps: R.tipps, regenSatz: R.regenSatz, stundenIndizes: R.stundenIndizes, luftTage: R.luftTage, pollenMorgen: R.pollenMorgen, hauptphasen: R.hauptphasen, trockenBis: R.trockenBis, gezeiten: R.gezeiten, balkenHoehe: R.balkenHoehe,
+    warnArt: R.warnArt, warnTitel: R.warnTitel, warnKurz: R.warnKurz, warnTipp: R.warnTipp, warnAuswahl: R.warnAuswahl, wegAufraeumen: R.wegAufraeumen, wegMerken: R.wegMerken, wegEntfernen: R.wegEntfernen };
+  M.warnSymbol = warnSymbol;
+  M.WEG_SCHLUESSEL = WEG_SCHLUESSEL;
 
   function bind(container, daten, ctx) {
     if (gebunden) gebunden.el.removeEventListener('click', gebunden.fn);
@@ -586,6 +652,15 @@
       if (a === 'graphs') ctx.oeffneReiter('graphs');
       else if (a === 'radsat') ctx.oeffneReiter('radsat');
       else if (a === 'nochmal') ctx.nochmal();
+      else if (a === 'warnung-auf') {
+        var zeile = b, inh = document.getElementById(b.getAttribute('aria-controls')), auf = zeile.getAttribute('aria-expanded') !== 'true';
+        zeile.setAttribute('aria-expanded', String(auf)); if (inh) inh.hidden = !auf;
+      }
+      else if (a === 'warnung-weg') {
+        var kachelEl = b.closest('.k-warnung'), ids = ((kachelEl && kachelEl.getAttribute('data-ids')) || '').split(',').filter(Boolean);
+        if (kachelEl && kachelEl.parentNode) kachelEl.parentNode.removeChild(kachelEl);
+        if (ctx.warnungWeg) ctx.warnungWeg(ids);
+      }
       else if (a === 'ansicht') {
         var radar = container.querySelector('.ansicht-radar'), werte = container.querySelector('.ansicht-werte');
         var zuRadar = !radar.classList.contains('aus') ? false : true;
@@ -609,6 +684,14 @@
     }).join('');
     bind(container, daten, ctx || {});
     kartenStarten(container, daten);
+  };
+
+  // Warnkachel nachträglich oben einsetzen, aufgeklappt (Tipp auf das ⚠️ in der Kopfleiste); ohne die übrigen Module neu zu zeichnen
+  M.warnungZeigen = function (container, daten) {
+    var alt = container.querySelector('.k-warnung'); if (alt && alt.parentNode) alt.parentNode.removeChild(alt);
+    var h = modWarnung(daten, true);
+    if (h) container.insertAdjacentHTML('afterbegin', h);
+    return container.querySelector('.warn-zeile');
   };
 
   M.skeleton = function (container) {

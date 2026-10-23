@@ -258,7 +258,7 @@ console.log('rendern');
 function containerStub() { return { innerHTML: '', setAttribute() { }, removeAttribute() { }, addEventListener() { }, removeEventListener() { }, querySelector() { return null; }, querySelectorAll() { return []; }, contains() { return true; } }; }
 function volleDaten() {
   const d = daten({ meer: true, marine: marine(), wolken: 10, stunde: [[23, 20, 'precipitation_probability', 70]],
-    warnungen: [{ event: 'WIND GUSTS', headline_de: 'Amtliche WARNUNG vor <b>STURMBÖEN</b>', description_de: 'Es treten Sturmböen auf.', instruction_de: 'Lose Gegenstände sichern.', severity: 'moderate', onset: '2026-10-23T12:00:00+00:00', expires: '2026-10-23T18:00:00+00:00' }],
+    warnungen: [{ event: 'WIND GUSTS', event_de: 'STURMBÖEN', id: 42, headline_de: 'Amtliche WARNUNG vor <b>STURMBÖEN</b>', description_de: 'Es treten Sturmböen auf.', instruction_de: 'Lose Gegenstände sichern.', severity: 'moderate', onset: '2026-10-23T12:00:00+00:00', expires: '2026-10-23T18:00:00+00:00' }],
     luft: { current: { european_aqi: 34, pm10: 12, pm2_5: 6, ozone: 70, alder_pollen: null, birch_pollen: null, grass_pollen: 25, mugwort_pollen: null, olive_pollen: null, ragweed_pollen: null }, hourly: { time: T.slice(0, 120), european_aqi: T.slice(0, 120).map(() => 34), alder_pollen: T.slice(0, 120).map(() => null), birch_pollen: T.slice(0, 120).map(() => null), grass_pollen: T.slice(0, 120).map(() => 25), mugwort_pollen: T.slice(0, 120).map(() => null), olive_pollen: T.slice(0, 120).map(() => null), ragweed_pollen: T.slice(0, 120).map(() => null) } } });
   d.radar = { host: 'https://tilecache.rainviewer.com', frames: [{ time: 1790000000, path: '/v2/radar/1790000000' }] };
   return d;
@@ -269,14 +269,16 @@ test('alle zwölf Module, mit Warnung, ohne Fehlerplatzhalter', () => {
   assert.ok(!h.includes('lässt sich gerade nicht anzeigen'), 'ein Modul wirft einen Fehler');
   ['k-warnung', 'k-aktuell', 'k-stunden', 'k-meteogramm', 'k-tage', 'k-luft', 'k-tipps', 'k-sonne', 'k-mond', 'k-wind', 'k-radar', 'k-pollen'].forEach((k) => assert.ok(h.includes('class="kachel ' + k), 'fehlt ' + k));
   assert.ok(h.includes('id="start-meteogramm"'));
-  assert.ok(h.includes('Markante Warnung') && h.includes('DWD über Bright Sky'));
+  assert.ok(h.includes('Warnung vor Sturmböen') && h.includes('DWD über Bright Sky'));
   assert.ok(!h.includes('<b>STURM'), 'API-Text wurde nicht maskiert');
   assert.strictEqual((h.match(/class="tag[ "]/g) || []).length, 8);
 });
-test('Warnung: Pille „Stufe 2 von 4“ neben der Überschrift; Aktuell: Uhrzeit des Stands links über dem Symbol', () => {
+test('Warnung: Einzeiler mit Stufe als Text, zugeklappt; Aktuell: Uhrzeit des Stands links über dem Symbol', () => {
   const c = containerStub(); Module.rendern(c, volleDaten(), { oeffneReiter() { }, nochmal() { } });
   const h = c.innerHTML;
-  assert.ok(/<div class="kopfzeile"><h2 class="kachel-kopf" id="m-warnung-t">Markante Warnung<\/h2><span class="pille">Stufe 2 von 4<\/span><\/div>/.test(h), 'Pille fehlt oder steht nicht neben der Überschrift');
+  assert.ok(/<button type="button" class="warn-zeile" aria-expanded="false" aria-controls="m-warnung-inhalt" data-aktion="warnung-auf">/.test(h), 'Einzeiler-Knopf fehlt');
+  assert.ok(h.includes('Stufe 2 von 4 · Sturmböen'), 'Einzeiler-Text fehlt');
+  assert.ok(/aria-label="Warnung ausblenden"/.test(h) && !h.includes('class="pille"'), 'x-Knopf fehlt oder alte Pille da');
   assert.ok(/<div class="aktuell-links"><p class="aktuell-label">Aktuell <span class="aktuell-zeit">14:00<\/span><\/p><div class="sym sym-aktuell">/.test(h), 'Aktuell mit Uhrzeit fehlt links');
   assert.ok(!/class="kopf"/.test(h), 'class="kopf" gehört der Kopfzeile der Hülle (Namensgleichheit)');
 });
@@ -307,6 +309,62 @@ test('Ersatzkachel eines fehlgeschlagenen Moduls hat Überschrift und aria-label
 test('Skeleton und Fehlerzustand', () => {
   const c = containerStub(); Module.skeleton(c); assert.ok(c.innerHTML.includes('skel') && !/spinner|kreisel/i.test(c.innerHTML));
   Module.fehler(c, 'Keine Verbindung.', () => { }); assert.ok(c.innerHTML.includes('Erneut versuchen') && c.innerHTML.includes('Keine Verbindung.'));
+});
+
+// ---------- Warnung: Auswahl, Weg-Liste, Texte ----------
+console.log('warnung');
+const WARN = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixturen', 'warnung.json'), 'utf8')).alerts[0];
+const W2 = Object.assign({}, WARN, { id: 3041999, severity: 'severe', event_de: 'STARKREGEN', expires: '2026-10-24T10:00:00+00:00' });
+const JETZT_MS = Date.parse('2026-10-23T02:40:00Z');
+test('Warnung: Einzeiler-Text für die Fixtur', () => {
+  eq(rechnen.warnKurz(WARN, 7200), 'Stufe 1 von 4 · Windböen · bis Sa. 04:00');
+  eq(rechnen.warnKurz(Object.assign({}, WARN, { expires: null }), 7200), 'Stufe 1 von 4 · Windböen');
+});
+test('Warnung: Titel aus event_de, keine Großbuchstaben-Sätze', () => {
+  eq(rechnen.warnTitel(WARN), 'Warnung vor Windböen');
+  eq(rechnen.warnTitel(W2), 'Warnung vor Starkregen');
+  assert.ok(!/[A-ZÄÖÜ]{3,}/.test(rechnen.warnTitel(WARN)), 'Großbuchstaben im Titel');
+  eq(rechnen.warnArt({ event_de: 'FROST' }), 'Frost');
+});
+test('Warnung: Verhaltenstipp ohne Quell-Präfixe und ohne „Das hilft:“', () => {
+  const t = rechnen.warnTipp(WARN.instruction_de);
+  eq(t.achte, 'Achte auf: umherfliegende leichte Gegenstände.');
+  eq(t.empfehlung, 'Lose Gegenstände sichern; z.B. Zelte und Abdeckungen befestigen.');
+  const nur = rechnen.warnTipp('Lose Gegenstände sichern.');
+  eq(nur.achte, ''); eq(nur.empfehlung, 'Lose Gegenstände sichern.');
+  const c = containerStub(); Module.rendern(c, daten({ warnungen: [WARN] }), {});
+  assert.ok(!/Das hilft|Hinweis auf|Handlungsempfehlungen/.test(c.innerHTML), 'Präfix im HTML');
+  assert.ok(c.innerHTML.includes('Warnung vor Windböen') && !c.innerHTML.includes('Amtliche WARNUNG'), 'Titel im HTML');
+});
+test('Warnung: Auswahl zeigt die schwerste nicht weggeklickte; weggeklickt gilt pro id', () => {
+  const a = rechnen.warnAuswahl([WARN, W2], [], JETZT_MS);
+  eq(a.zeigen, true); eq(a.erste.id, 3041999); eq(a.weitere.length, 1);
+  const b = rechnen.warnAuswahl([WARN, W2], [{ id: '3041999', expires: W2.expires }], JETZT_MS);
+  eq(b.zeigen, true); eq(b.erste.id, 3041830, 'neue/andere id zeigt die Kachel wieder');
+  const c = rechnen.warnAuswahl([WARN, W2], [{ id: '3041999', expires: W2.expires }, { id: '3041830', expires: WARN.expires }], JETZT_MS);
+  eq(c.zeigen, false); eq(c.erste.id, 3041999, 'Knopf zeigt die schwerste'); 
+  eq(rechnen.warnAuswahl([], [], JETZT_MS).erste, null);
+  eq(rechnen.warnAuswahl(null, [], JETZT_MS).zeigen, false);
+  const d = rechnen.warnAuswahl([{ alert_id: 'abc', severity: 'minor' }], [{ id: 'abc', expires: '2026-10-24T00:00:00Z' }], JETZT_MS);
+  eq(d.zeigen, false, 'alert_id als Ersatz für id');
+});
+test('Warnung: Weg-Liste merken, entfernen, abgelaufene aufräumen', () => {
+  let l = rechnen.wegMerken([], WARN, JETZT_MS);
+  eq(l, [{ id: '3041830', expires: WARN.expires }]);
+  l = rechnen.wegMerken(l, WARN, JETZT_MS); eq(l.length, 1, 'keine Doppelten');
+  l = rechnen.wegMerken(l, { id: 7, expires: '2026-10-22T10:00:00Z' }, JETZT_MS);
+  eq(rechnen.wegAufraeumen(l, JETZT_MS).map((x) => x.id), ['3041830'], 'abgelaufene fliegen raus');
+  eq(rechnen.wegAufraeumen('kaputt', JETZT_MS), []);
+  eq(rechnen.wegEntfernen(l, ['3041830']).map((x) => x.id), ['7']);
+});
+test('Warnung: Rendern liest die Weg-Liste (WL.merk) und zeigt bei nur weggeklickten keine Kachel', () => {
+  WL.merk('warnung-weg', [{ id: '3041830', expires: WARN.expires }]);
+  let c = containerStub(); Module.rendern(c, daten({ warnungen: [WARN] }), {});
+  assert.ok(!c.innerHTML.includes('k-warnung'), 'Kachel trotz Wegklicken');
+  WL.merk('warnung-weg', [{ id: '1', expires: WARN.expires }]);
+  c = containerStub(); Module.rendern(c, daten({ warnungen: [WARN] }), {});
+  assert.ok(c.innerHTML.includes('k-warnung'), 'neue id zeigt die Kachel wieder');
+  WL.merk('warnung-weg', null);
 });
 
 console.log('\n' + ok + ' bestanden, ' + fail + ' fehlgeschlagen');

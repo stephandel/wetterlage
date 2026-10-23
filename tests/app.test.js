@@ -183,19 +183,144 @@ function wahr(b, was) { if (!b) throw new Error(was); }
     await ctx.close();
   });
 
-  await pruefe('11 Warnungs-Kachel: Pille „Stufe N von 4“ rechts neben der Überschrift, Akzent-Tint, mindestens Footnote', async () => {
+  const SCHRIFT = async (page, prozent) => { await page.evaluate((p) => { document.documentElement.style.fontSize = (17 * p / 100) + 'px'; window.dispatchEvent(new Event('resize')); }, prozent); await page.waitForTimeout(700); };
+  const WEG_FIX = JSON.stringify([{ id: '3041830', expires: '2026-10-24T02:00:00+00:00' }]);
+
+  await pruefe('11 Warnungs-Kachel zugeklappt: ein Knopf über die Kachelbreite, ≥ 44 px hoch, Text „Stufe 1 von 4 · Windböen · bis Sa. 04:00“, Chevron, keine Pille', async () => {
     const { ctx, page } = await mockSeite(browser);
     const p = await page.evaluate(() => {
-      const e = document.querySelector('.k-warnung .pille'), h = document.querySelector('.k-warnung .kachel-kopf'), t = document.createElement('span');
-      t.style.background = 'var(--akzent-tint)'; document.body.appendChild(t);
-      const tint = getComputedStyle(t).backgroundColor; t.remove();
-      const wurzel = parseFloat(getComputedStyle(document.documentElement).fontSize), r = e.getBoundingClientRect(), hr = h.getBoundingClientRect();
-      return { text: e.textContent, bg: getComputedStyle(e).backgroundColor, tint, fs: parseFloat(getComputedStyle(e).fontSize) / wurzel, rechts: r.left >= hr.right - 1, gleicheZeile: r.top < hr.bottom && r.bottom > hr.top };
+      const k = document.querySelector('.k-warnung'), z = k && k.querySelector('button.warn-zeile');
+      if (!z) return null;
+      const r = z.getBoundingClientRect(), kr = k.getBoundingClientRect(), wurzel = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      return { text: z.textContent.replace(/\s+/g, ' ').trim(), ex: z.getAttribute('aria-expanded'), ctrl: z.getAttribute('aria-controls'), ziel: !!document.getElementById(z.getAttribute('aria-controls')), h: r.height, breit: r.width >= kr.width - 2 * 20, fs: parseFloat(getComputedStyle(z).fontSize) / wurzel, svgs: z.querySelectorAll('svg[aria-hidden="true"]').length, pille: !!k.querySelector('.pille') };
     });
-    wahr(/^Stufe [1-4] von 4$/.test(p.text), 'Text: ' + p.text);
-    gleich(p.bg, p.tint, 'Pillenfarbe = --akzent-tint');
-    wahr(p.fs >= 0.8125 - 1e-6, 'Schrift ' + p.fs + ' rem');
-    wahr(p.rechts && p.gleicheZeile, 'Pille nicht rechts neben der Überschrift');
+    wahr(p, 'kein Knopf .warn-zeile in der Warnkachel');
+    gleich(p.text, 'Stufe 1 von 4 · Windböen · bis Sa. 04:00', 'Einzeiler-Text');
+    gleich([p.ex, p.ziel, p.svgs, p.pille], ['false', true, 2, false], 'aria-expanded, aria-controls-Ziel, Symbole (Warndreieck + Chevron), Pille');
+    wahr(p.h >= 43.5 && p.breit && p.fs >= 0.9375 - 1e-6, 'Maße: ' + JSON.stringify(p));
+    await ctx.close();
+  });
+
+  for (const [prozent, anteil] of [[100, 0.15], [150, 0.5]]) {
+    await pruefe('11b Warnkachel zugeklappt belegt bei ' + prozent + ' % höchstens ' + (anteil * 100) + ' % von 844 px', async () => {
+      const { ctx, page } = await mockSeite(browser);
+      if (prozent !== 100) await SCHRIFT(page, prozent);
+      const h = await page.evaluate(() => document.querySelector('.k-warnung').getBoundingClientRect().height);
+      wahr(h <= 844 * anteil, 'Höhe ' + Math.round(h) + ' px > ' + Math.round(844 * anteil));
+      await ctx.close();
+    });
+  }
+
+  await pruefe('11c Aufklappen: aria-expanded schaltet, Titel „Warnung vor Windböen“ ohne Großbuchstaben, Tipp ohne Präfixe, Quelle, Chevron dreht, nur ein Umschalten (kein Neuzeichnen)', async () => {
+    const { ctx, page } = await mockSeite(browser);
+    await page.evaluate(() => { document.querySelector('.k-warnung').__marke = 1; });
+    await page.click('.warn-zeile'); await page.waitForTimeout(450);
+    const a = await page.evaluate(() => {
+      const k = document.querySelector('.k-warnung'), z = k.querySelector('.warn-zeile'), i = document.getElementById(z.getAttribute('aria-controls')), ch = z.querySelector('.warn-chev');
+      return { ex: z.getAttribute('aria-expanded'), sichtbar: i.getBoundingClientRect().height > 0, text: i.innerText, marke: k.__marke, dreh: getComputedStyle(ch).transform, trans: getComputedStyle(ch).transitionProperty };
+    });
+    gleich(a.ex, 'true', 'aria-expanded');
+    wahr(a.sichtbar, 'Bereich nicht sichtbar');
+    gleich(a.marke, 1, 'Kachel wurde neu gezeichnet');
+    wahr(/Warnung vor Windböen/.test(a.text) && !/WINDBÖEN|Amtliche/.test(a.text), 'Titel: ' + a.text);
+    wahr(/Achte auf: umherfliegende leichte Gegenstände\./.test(a.text) && /Lose Gegenstände sichern/.test(a.text), 'Tipp: ' + a.text);
+    wahr(!/Das hilft|Hinweis auf|Handlungsempfehlungen/.test(a.text), 'Präfix im Text: ' + a.text);
+    wahr(/Mannheim/.test(a.text) && /Es treten Windböen/.test(a.text) && /Quelle: DWD über Bright Sky/.test(a.text), 'Ort, Warntext oder Quelle fehlen: ' + a.text);
+    gleich(a.trans, 'transform', 'Chevron animiert nur transform');
+    wahr(/^matrix\(-1,/.test(a.dreh), 'Chevron nicht um 180° gedreht: ' + a.dreh);
+    await page.click('.warn-zeile');
+    gleich(await page.getAttribute('.warn-zeile', 'aria-expanded'), 'false', 'aria-expanded nach zweitem Tipp');
+    wahr(!(await page.isVisible('.warn-inhalt')), 'Bereich nach Zuklappen sichtbar');
+    await ctx.close();
+  });
+
+  await pruefe('11d „x“ blendet aus: Kachel weg, ⚠️-Knopf links in der Kopfleiste (44 × 44, Stufe im aria-label, nicht verdeckt), Ortsname überlappt nicht, bleibt nach Neuladen; Tipp darauf bringt die Kachel aufgeklappt zurück', async () => {
+    const { ctx, page } = await mockSeite(browser);
+    await page.addStyleTag({ content: SAFE });
+    wahr(!(await page.isVisible('#knopf-warnung')), '⚠️-Knopf schon vor dem Wegklicken sichtbar');
+    await page.click('.warn-zeile');
+    const x = await page.evaluate(() => { const b = document.querySelector('.warn-x'), r = b.getBoundingClientRect(); return { l: b.getAttribute('aria-label'), w: r.width, h: r.height, svg: !!b.querySelector('svg') }; });
+    gleich([x.l, x.svg], ['Warnung ausblenden', true], 'x-Knopf');
+    wahr(x.w >= 43.5 && x.h >= 43.5, 'x-Knopf ' + x.w + '×' + x.h);
+    await page.click('.warn-x'); await page.waitForTimeout(300);
+    gleich(await page.locator('.k-warnung').count(), 0, 'Kachel nach „x“');
+    const pruefeKnopf = async (was) => {
+      const k = await page.evaluate(() => {
+        const b = document.getElementById('knopf-warnung'), r = b.getBoundingClientRect(), o = document.getElementById('knopf-orte').getBoundingClientRect(), n = document.getElementById('kopf-ort').getBoundingClientRect();
+        const treffer = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return { sichtbar: r.width > 0, w: r.width, h: r.height, label: b.getAttribute('aria-label'), treffer: !!treffer && (treffer === b || b.contains(treffer)), nachMenue: r.left >= o.right - 0.5, vorOrt: r.right <= n.left + 0.5, svg: !!b.querySelector('svg[aria-hidden="true"]'), text: b.textContent.trim() };
+      });
+      wahr(k.sichtbar, was + ': ⚠️-Knopf nicht sichtbar');
+      wahr(k.w >= 43.5 && k.h >= 43.5, was + ': Größe ' + k.w + '×' + k.h);
+      gleich(k.label, 'Wetterwarnung Stufe 1: Windböen, bis Sa. 04:00 – antippen zum Anzeigen', was + ': aria-label');
+      wahr(k.treffer, was + ': ⚠️-Knopf ist am Mittelpunkt verdeckt');
+      wahr(k.nachMenue && k.vorOrt && k.svg && k.text === '', was + ': Lage/Inhalt ' + JSON.stringify(k));
+    };
+    await pruefeKnopf('nach „x“');
+    wahr(/Warnung ausgeblendet/.test(await page.textContent('#warn-ansage')), 'Ansage fehlt: ' + await page.textContent('#warn-ansage'));
+    gleich(await page.getAttribute('#warn-ansage', 'aria-live'), 'polite', 'aria-live');
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForFunction(() => /Stand \d\d:\d\d/.test(document.getElementById('kopf-stand').textContent), null, { timeout: 15000 });
+    await page.addStyleTag({ content: SAFE });
+    gleich(await page.locator('.k-warnung').count(), 0, 'Kachel nach Neuladen');
+    await pruefeKnopf('nach Neuladen');
+    await page.evaluate(() => window.scrollTo(0, 500));
+    await page.click('#knopf-warnung'); await page.waitForTimeout(400);
+    const d = await page.evaluate(() => ({ ex: document.querySelector('.warn-zeile') && document.querySelector('.warn-zeile').getAttribute('aria-expanded'), sy: window.scrollY, fokus: document.activeElement.classList.contains('warn-zeile'), knopf: document.getElementById('knopf-warnung').getBoundingClientRect().width, erste: document.querySelector('#module > *').classList.contains('k-warnung') }));
+    gleich([d.ex, d.sy, d.fokus, d.knopf, d.erste], ['true', 0, true, 0, true], 'nach Tipp auf ⚠️ (aufgeklappt, oben, Fokus, Knopf weg, Kachel zuerst)');
+    gleich(await page.evaluate(() => JSON.parse(localStorage.getItem('wetterlage-warnung-weg') || '[]').length), 0, 'Weg-Liste nach Tipp auf ⚠️');
+    await ctx.close();
+  });
+
+  await pruefe('11e Kopfleiste mit ⚠️-Knopf: „Mengerschied“ bei 150 % gekürzt, nichts überlappt, kein seitliches Scrollen', async () => {
+    const { ctx, page } = await mockSeite(browser, {}, `try { localStorage.setItem('wetterlage-ort-aktiv', '"mengerschied"'); localStorage.setItem('wetterlage-warnung-weg', ${JSON.stringify(WEG_FIX)}); } catch (e) { }`);
+    await SCHRIFT(page, 150);
+    const k = await page.evaluate(() => {
+      const r = (id) => document.getElementById(id).getBoundingClientRect(), o = document.getElementById('kopf-ort'), b = r('knopf-warnung');
+      return { ort: o.textContent, gekuerzt: o.scrollWidth > o.clientWidth, sichtbar: b.width > 0, vorOrt: b.right <= r('kopf-ort').left + 0.5, ortVorSuche: r('kopf-ort').right <= r('knopf-suche').left + 0.5, sw: document.documentElement.scrollWidth, tap: [b.width, b.height] };
+    });
+    gleich(k.ort, 'Mengerschied', 'Ortsname');
+    wahr(k.sichtbar && k.gekuerzt && k.vorOrt && k.ortVorSuche && k.sw <= 390 && k.tap[0] >= 43.5, JSON.stringify(k));
+    await ctx.close();
+  });
+
+  await pruefe('11f ⚠️-Wackeln: Keyframes nur transform rotate(±8°), ≤ 600 ms, einmal; bei reduzierter Bewegung nur Einblenden mit opacity ≤ 200 ms', async () => {
+    for (const reduziert of [false, true]) {
+      const { ctx, page } = await mockSeite(browser, reduziert ? { reducedMotion: 'reduce' } : {});
+      await page.click('.warn-zeile'); await page.click('.warn-x'); await page.waitForTimeout(100);
+      const a = await page.evaluate(() => {
+        const cs = getComputedStyle(document.getElementById('knopf-warnung')), name = cs.animationName;
+        let kf = null;
+        for (const sh of document.styleSheets) { let regeln; try { regeln = sh.cssRules; } catch (e) { continue; } for (const r of regeln) { const rr = r.type === 7 ? r : (r.cssRules ? [...r.cssRules].find((x) => x.type === 7 && x.name === name) : null); if (rr && rr.name === name) kf = rr; } }
+        const eig = kf ? [...kf.cssRules].map((s) => [...s.style].join(',') + '|' + s.style.cssText) : [];
+        return { name, dauer: parseFloat(cs.animationDuration) * (/ms$/.test(cs.animationDuration) ? 1 : 1000), anzahl: cs.animationIterationCount, eig };
+      });
+      wahr(a.name && a.name !== 'none', (reduziert ? 'reduziert' : 'normal') + ': keine Animation am Knopf');
+      wahr(a.eig.length > 0, 'Keyframes ' + a.name + ' nicht gefunden');
+      if (reduziert) { wahr(a.eig.every((e) => /^opacity\|/.test(e)), 'reduziert: nicht nur opacity: ' + JSON.stringify(a.eig)); wahr(a.dauer <= 200, 'reduziert: Dauer ' + a.dauer); }
+      else {
+        wahr(a.eig.every((e) => /^transform\|/.test(e)), 'nicht nur transform: ' + JSON.stringify(a.eig));
+        wahr(a.eig.every((e) => /rotate\((0|0deg|-?8deg)\)/.test(e)), 'Winkel nicht ±8°: ' + JSON.stringify(a.eig));
+        wahr(a.dauer <= 600 && a.anzahl === '1', 'Dauer ' + a.dauer + ' ms, Wiederholungen ' + a.anzahl);
+      }
+      await ctx.close();
+    }
+  });
+
+  await pruefe('11g Querformat 844 × 390: Warnung als Einzeiler über die volle Breite, linke Spalte unter „Aktuell“ gefüllt, Spalten gleich lang, kein seitliches Scrollen', async () => {
+    const { ctx, page } = await mockSeite(browser, { viewport: { width: 844, height: 390 } });
+    const q = await page.evaluate(() => {
+      const t = [...document.querySelectorAll('#module > .kachel')].map((e) => { const r = e.getBoundingClientRect(); return { k: e.className.split(' ')[1], l: r.left, r: r.right, o: r.top + scrollY, u: r.bottom + scrollY, b: r.width }; });
+      return { t, sw: document.documentElement.scrollWidth };
+    });
+    const warn = q.t.find((x) => x.k === 'k-warnung'), akt = q.t.find((x) => x.k === 'k-aktuell');
+    wahr(warn && warn.b > 700 && warn.u - warn.o <= 80, 'Warnung nicht Einzeiler in voller Breite: ' + JSON.stringify(warn));
+    wahr(akt.b < 460 && akt.l < 100, 'Aktuell nicht links in halber Breite: ' + JSON.stringify(akt));
+    const links = q.t.filter((x) => x.b < 600 && x.l < 100 && x.o >= akt.u - 1), rechts = q.t.filter((x) => x.b < 600 && x.l > 300);
+    wahr(links.length >= 3, 'unter „Aktuell“ nur ' + links.length + ' Kachel(n) links: ' + JSON.stringify(q.t.map((x) => [x.k, Math.round(x.l), Math.round(x.o)])));
+    const ul = Math.max.apply(null, q.t.filter((x) => x.b < 600 && x.l < 100).map((x) => x.u)), ur = Math.max.apply(null, rechts.map((x) => x.u));
+    wahr(Math.abs(ul - ur) <= 40, 'Unterkante links ' + Math.round(ul) + ' ≠ rechts ' + Math.round(ur));
+    wahr(q.sw <= 844, 'scrollWidth ' + q.sw);
     await ctx.close();
   });
 

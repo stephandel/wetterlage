@@ -32,9 +32,9 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --akzent-2-text: var(--akzent-2);
-    --warn-1: color-mix(in srgb, var(--gelb) 30%, var(--bg-2));
-    --warn-2: color-mix(in srgb, var(--orange) 30%, var(--bg-2));
-    --warn-3: color-mix(in srgb, var(--rot) 40%, var(--bg-2));
+    --warn-1: color-mix(in srgb, var(--gelb) 38%, var(--bg-2));
+    --warn-2: color-mix(in srgb, var(--orange) 45%, var(--bg-2));
+    --warn-3: color-mix(in srgb, var(--rot) 50%, var(--bg-2));
   }
 }
 
@@ -86,16 +86,28 @@
 .rose-text { font-size: 12px;   /* viewBox 120 (Rose 7,5 rem) */ fill: var(--label-2); text-anchor: middle; dominant-baseline: central; }
 
 /* ---------- Warnung ---------- */
-.k-warnung { color: var(--label); }
-.k-warnung .kachel-kopf, .k-warnung .fuss, .warn-meta { color: var(--label); }
-.warn-1 { background: var(--warn-1); } .warn-2 { background: var(--warn-2); } .warn-3 { background: var(--warn-3); } .warn-4 { background: var(--warn-4); }
-.kopfzeile { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin: 0 0 var(--s2); }
-.kopfzeile .kachel-kopf { margin: 0; min-width: 0; }
-.pille { flex: none; padding: var(--s1) var(--s3); border-radius: var(--r-chip); background: var(--akzent-tint); color: var(--label); font-size: var(--fs-footnote); font-weight: 600; white-space: nowrap; }
-.warn-titel { font-size: var(--fs-title3); font-weight: 700; line-height: 1.2; }
-.warn-meta { margin-top: var(--s1); font-size: var(--fs-subhead); }
+.k-warnung { color: var(--label); padding: 0; overflow: hidden; }
+.k-warnung .fuss, .warn-meta { color: var(--label); }
+.warn-1 { background: var(--warn-1); box-shadow: inset 4px 0 0 var(--gelb); }
+.warn-2 { background: var(--warn-2); box-shadow: inset 4px 0 0 var(--orange); }
+.warn-3 { background: var(--warn-3); box-shadow: inset 4px 0 0 var(--rot); }
+.warn-4 { background: var(--warn-4); box-shadow: inset 4px 0 0 var(--rot); }
+.warn-zeile { display: flex; align-items: center; gap: var(--s3); width: 100%; min-height: var(--tap); padding: var(--s2) var(--s4); text-align: start; color: inherit; font-size: var(--fs-subhead); font-weight: 600; line-height: 1.25; }
+.warn-zeile .warn-kurz { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.warn-sym, .warn-chev { flex: none; display: inline-flex; }
+.warn-sym svg, .warn-chev svg { width: var(--ikon-groesse); height: var(--ikon-groesse); }
+.warn-chev { transition: transform var(--dauer) var(--ease); }
+.warn-zeile[aria-expanded="true"] .warn-chev { transform: rotate(180deg); }
+.warn-inhalt { position: relative; padding: 0 var(--s4) var(--s4); }
+.warn-inhalt[hidden] { display: none; }
+.warn-x { position: absolute; top: 0; inset-inline-end: var(--s2); inline-size: var(--tap); block-size: var(--tap); display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-button); color: inherit; }
+.warn-x svg { width: var(--ikon-groesse); height: var(--ikon-groesse); }
+.warn-titel { margin: 0; padding-inline-end: var(--tap); font-size: var(--fs-title3); font-weight: 700; line-height: 1.2; }
+.warn-meta { margin-top: var(--s2); font-size: var(--fs-subhead); }
 .warn-text, .warn-tipp, .warn-weitere { margin-top: var(--s3); font-size: var(--fs-body); line-height: var(--lh); max-inline-size: 65ch; }
 .warn-weitere { padding-left: var(--s5); }
+.warn-text + .warn-tipp { margin-top: var(--s3); }
+.warn-tipp + .warn-tipp { margin-top: var(--s2); }
 
 /* ---------- Aktuell ---------- */
 .aktuell { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
@@ -276,10 +288,9 @@
 
 /* ---------- Querformat (iPhone liegend) ---------- */
 @media (orientation: landscape) and (max-height: 500px) {
-  #module { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  #module > .kachel { grid-column: 2; }
-  #module > .k-warnung, #module > .k-fehler { grid-column: 1 / -1; }
-  #module > .k-aktuell { grid-column: 1; grid-row: span 10; }
+  #module { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; }
+  #module > .kachel { grid-column: span 1; }
+  #module > .k-warnung, #module > .k-fehler, #module > .k-pollen { grid-column: 1 / -1; }
   .hero { font-size: calc(min(var(--fs-hero), 22vw) * .8); }
   .wverlauf { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
@@ -302,5 +313,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .skel { animation: none; }
+  .warn-chev { transition: none; }
   .tippbar:active { transform: none; }
 }

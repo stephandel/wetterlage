@@ -1,6 +1,6 @@
 /* app.js – Hülle der App Wetterlage: Reiter, Orte, Daten laden, Kamera-Studio, Service Worker.
    Schnittstelle zu module.js: #module, Module.skeleton(container), Module.rendern(container, daten, ctx), Module.fehler(container, text, nochmal);
-   ctx = { oeffneReiter(id), nochmal() }. Gemeinsame Hilfen: window.WL (gemeinsam.js). */
+   ctx = { oeffneReiter(id), nochmal(), warnungWeg(ids) }; Module.warnungZeigen(container, daten), Module.rechnen.warn*, Module.WEG_SCHLUESSEL, Module.warnSymbol(). Gemeinsame Hilfen: window.WL (gemeinsam.js). */
 (function () {
   'use strict';
 
@@ -85,7 +85,8 @@
     z.ort = ort;
     if (ort.id !== 'standort') WL.merk('ort-aktiv', ort.id);
     z.abbauend = true; try { if (window.Bausteine) Bausteine.abbauen(); } catch (e) { } z.abbauend = false;
-    z.aktuell = null; z.startMgAusstehend = false;
+    z.aktuell = null; z.obj = null; z.startMgAusstehend = false;
+    warnKnopfZeigen();
     kopfOrt();
     orteZeichnen();
     if (!$('orte-blatt').hidden) blattSchliessen('orte');
@@ -127,6 +128,52 @@
     setze();
     if (window.ResizeObserver) new ResizeObserver(setze).observe(kopf, { box: 'border-box' });   // Safe-Area ist Innenabstand: nur die Rahmenbox ändert sich
     else window.addEventListener('resize', setze);
+  }
+
+  // ---------- Warnung: ⚠️ in der Kopfleiste ----------
+  // Weg-Liste (localStorage, [{ id, expires }]) pflegt app.js; module.js liest sie beim Zeichnen und meldet das Wegklicken über ctx.warnungWeg
+  function wegLesen() { return Module.rechnen.wegAufraeumen(WL.merk(Module.WEG_SCHLUESSEL), Date.now()); }
+  function warnAnsage(text) { var a = $('warn-ansage'); a.textContent = ''; setTimeout(function () { a.textContent = text; }, 50); }
+  function warnKnopfZeigen() {
+    var b = $('knopf-warnung'), d = z.obj, kopf = $('kopf');
+    var a = d && Module.rechnen.warnAuswahl(d.warnungen, wegLesen(), Date.now());
+    var zeigen = !!(a && !a.zeigen && a.erste);
+    var warSichtbar = !b.hidden;
+    if (zeigen) {
+      var w = a.erste, off = d.forecast && d.forecast.utc_offset_seconds || 0, kurz = Module.rechnen.warnKurz(w, off).split(' · ');
+      var stufe = kurz[0].replace(/^Stufe (\d) von 4$/, '$1');
+      b.innerHTML = Module.warnSymbol();
+      b.setAttribute('data-stufe', stufe);
+      b.setAttribute('aria-label', 'Wetterwarnung Stufe ' + stufe + ': ' + kurz.slice(1).join(', ') + ' – antippen zum Anzeigen');
+    }
+    b.hidden = !zeigen;
+    kopf.classList.toggle('mit-warnung', zeigen);
+    // Wackeln nur beim Erscheinen, nicht bei jedem Neuladen
+    if (zeigen && !warSichtbar) { b.classList.remove('wackelt'); void b.offsetWidth; b.classList.add('wackelt'); }
+    if (!zeigen) b.classList.remove('wackelt');
+  }
+  // „x“ in der Kachel: alle gezeigten Warnungen merken, Kachel ist schon entfernt
+  function warnungWeg(ids) {
+    var d = z.obj; if (!d) return;
+    var liste = wegLesen();
+    (d.warnungen || []).forEach(function (w) {
+      var i = w && (w.id != null ? w.id : w.alert_id);
+      if (i != null && ids.indexOf(String(i)) >= 0) liste = Module.rechnen.wegMerken(liste, w, Date.now());
+    });
+    WL.merk(Module.WEG_SCHLUESSEL, liste);
+    warnKnopfZeigen();
+    warnAnsage('Warnung ausgeblendet. Symbol oben links zeigt sie wieder.');
+    var b = $('knopf-warnung'); if (!b.hidden) b.focus();
+  }
+  // Tipp auf ⚠️: Kachel wieder, aufgeklappt, oben, Fokus auf die Kachel-Zeile
+  function warnungZurueck() {
+    var d = z.obj; if (!d) return;
+    var ids = (d.warnungen || []).map(function (w) { return String(w.id != null ? w.id : w.alert_id); });
+    WL.merk(Module.WEG_SCHLUESSEL, Module.rechnen.wegEntfernen(wegLesen(), ids));
+    var zeile = Module.warnungZeigen($('module'), d);
+    warnKnopfZeigen();
+    window.scrollTo(0, 0);
+    if (zeile) zeile.focus();
   }
 
   // ---------- Reiter ----------
@@ -369,6 +416,7 @@
     };
     var hatteDaten = !!z.aktuell;
     z.aktuell = Object.assign({}, d, { offline: obj.offline });
+    z.obj = obj;
     kopfStand(standText(obj));
     offlineHinweis();
     var cur = d.forecast.current || {};
@@ -379,10 +427,11 @@
     }
     var container = $('module');
     if (window.Module && typeof Module.rendern === 'function') {
-      Module.rendern(container, obj, { oeffneReiter: zeigeReiter, nochmal: function () { ladeAlles(ort); } });
+      Module.rendern(container, obj, { oeffneReiter: zeigeReiter, nochmal: function () { ladeAlles(ort); }, warnungWeg: warnungWeg });
     } else {
       container.innerHTML = '<p class="hinweis">Module fehlen.</p>';
     }
+    warnKnopfZeigen();
     z.startMgAusstehend = !!$('start-meteogramm');
     if (z.reiter === 'wetter') startMeteogrammZeigen();
     // Der Kartenreiter wurde ohne Daten geöffnet (Offset 0): mit dem Offset des Orts neu aufbauen
@@ -513,6 +562,7 @@
     $('knopf-orte').addEventListener('click', function () { orteOeffnen(false); });
     $('knopf-suche').addEventListener('click', function () { orteOeffnen(true); });
     $('knopf-teilen').addEventListener('click', studioOeffnen);
+    $('knopf-warnung').addEventListener('click', warnungZurueck);
     $('mehr-suchen').addEventListener('click', function () { orteOeffnen(true); });
 
     // Orte-Blatt

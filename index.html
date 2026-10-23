@@ -25,6 +25,7 @@
 
 <header class="kopf glas" id="kopf">
   <button type="button" class="kopf-knopf" id="knopf-orte" data-ikon="sliders" aria-label="Orte"></button>
+  <button type="button" class="kopf-knopf kopf-warnung" id="knopf-warnung" hidden></button>
   <div class="kopf-mitte">
     <div class="kopf-ort" id="kopf-ort">Wetterlage</div>
     <div class="kopf-stand" id="kopf-stand" aria-live="polite">Lädt …</div>
@@ -32,6 +33,8 @@
   <button type="button" class="kopf-knopf" id="knopf-suche" data-ikon="search" aria-label="Ort suchen"></button>
   <button type="button" class="kopf-knopf" id="knopf-teilen" data-ikon="share" aria-label="Wetterfoto teilen"></button>
 </header>
+
+<div class="nur-sr" id="warn-ansage" aria-live="polite"></div>
 
 <main id="inhalt" class="inhalt">
   <section id="reiter-wetter" class="reiter" role="tabpanel" aria-labelledby="tab-wetter" hidden>
