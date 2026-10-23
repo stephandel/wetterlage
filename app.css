@@ -216,6 +216,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible, a:focus-vis
 body.blatt-offen { overflow: hidden; }
 /* WebKit zeichnet die Leaflet-Ebenen der eingebetteten Karte über ein offenes Blatt (Tippen trifft das Blatt, sichtbar ist die Karte); das Blatt deckt alles, darum Karte solange verbergen */
 body.blatt-offen #karte { visibility: hidden; }
+/* Ebenso malte WebKit die Karte beim Scrollen über die feste Kopfleiste: eigene Stapelebene (nur eingebettet, das Vollbild-Blatt des Bausteins braucht seine z-index-Stufe) */
+#karte:not(.wk-vollbild) { position: relative; z-index: 0; }
 .ort-name[aria-current="true"] span:first-child { font-weight: 700; }
 .ort-haken { color: var(--akzent); display: inline-flex; flex: none; }
 .ort-haken svg { inline-size: var(--ikon-groesse); block-size: var(--ikon-groesse); }

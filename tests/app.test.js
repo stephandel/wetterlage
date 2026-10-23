@@ -762,6 +762,12 @@ function wahr(b, was) { if (!b) throw new Error(was); }
       await page.evaluate(() => window.scrollTo(0, 120)); await page.waitForTimeout(300);
       const kopf = await page.evaluate(() => { const k = document.getElementById('kopf-ort').getBoundingClientRect(), t = document.elementFromPoint(k.left + k.width / 2, k.top + k.height / 2); return !!(t && t.closest('#kopf')); });
       wahr(kopf, tab + ': Karte liegt über der Kopfleiste');
+      // auch gezeichnet: freie Stelle der Kopfleiste (rechts neben dem Menü-Knopf) muss nahe der Leistenfarbe sein (85 % deckend), nicht Kartenfarbe
+      const kp = await page.evaluate(() => { const m = document.getElementById('knopf-orte').getBoundingClientRect(); return { x: Math.round(m.right + 6), y: Math.round(m.top + m.height / 2), c: getComputedStyle(document.documentElement).getPropertyValue('--bg-2') }; });
+      const kb = await page.screenshot({ clip: { x: kp.x, y: kp.y, width: 1, height: 1 } });
+      const kpx = await page.evaluate(async (b64) => { const i = new Image(); i.src = 'data:image/png;base64,' + b64; await i.decode(); const cv = document.createElement('canvas'); cv.width = 1; cv.height = 1; const g = cv.getContext('2d'); g.drawImage(i, 0, 0); return Array.from(g.getImageData(0, 0, 1, 1).data.slice(0, 3)); }, kb.toString('base64'));
+      const kso = await page.evaluate((c) => { const d = document.createElement('div'); d.style.color = c; document.body.appendChild(d); const v = getComputedStyle(d).color; d.remove(); const n = v.match(/[\d.]+/g).slice(0, 3).map(Number); return /color\(/.test(v) ? n.map((x) => Math.round(x * 255)) : n; }, kp.c.trim());
+      wahr(kpx.every((v, i) => Math.abs(v - kso[i]) <= 45), tab + ': Kopfleiste gescrollt nicht in Leistenfarbe (Karte darüber gemalt?) – Pixel ' + kpx.join(',') + ', Leiste ' + kso.join(','));
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.tap('#knopf-orte'); await page.waitForTimeout(500);
       const blatt = await page.evaluate(() => { const r = document.getElementById('orte-fertig').getBoundingClientRect(), t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2), s = document.getElementById('orte-suche').getBoundingClientRect(), u = document.elementFromPoint(s.left + s.width / 2, s.top + s.height / 2); return [!!(t && t.id === 'orte-fertig'), !!(u && u.id === 'orte-suche')]; });
