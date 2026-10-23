@@ -1,0 +1,287 @@
+/* app.css – Hülle der App Wetterlage: Kopfzeile, Tab-Leiste, Reiter, Blätter, Mehr-Listen.
+   Reihenfolge im Kopf der Seite: base.css, tokens.css, Leaflet, meteogramm.css, wpkarte.css, app.css, module.css.
+   Alle Werte kommen aus tokens.css; was dort fehlt, steht im Block „Ergänzungen zu tokens.css“. */
+
+/* Ergänzungen zu tokens.css */
+:root {
+  --seite-links: max(var(--rand), var(--safe-left));
+  --seite-rechts: max(var(--rand), var(--safe-right));
+  --nebentext: color-mix(in srgb, var(--label) 78%, transparent);   /* Nebentext auf Hintergrund und Glas, kräftiger als --label-2 */
+  --fokus-ring: 2px solid var(--akzent);
+  --tab-fuellung: .28;
+  --blatt-z: 100;
+  --schalter-breite: 51px;
+  --schalter-hoehe: 31px;
+  --schalter-knauf: 27px;
+  --tabbar-unten: max(var(--s2), var(--safe-bottom));
+  --tabbar-breite: 480px;
+}
+@media (prefers-contrast: more) {
+  :root {
+    --trenner: color-mix(in srgb, var(--label) 65%, transparent);
+    --label-2: color-mix(in srgb, var(--label) 88%, transparent);
+    --nebentext: var(--label);
+    --glas-rand: color-mix(in srgb, var(--label) 55%, transparent);
+  }
+}
+
+/* Grundlage */
+/* iOS: Schriftgröße aus den Einstellungen setzt app.js (schriftMessen) als Wurzelgröße */
+html { background: var(--bg); -webkit-text-size-adjust: 100%; }
+body {
+  background: transparent;
+  min-height: 100dvh;
+  line-height: var(--lh);
+}
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(180deg, var(--akzent-tint) 0%, var(--bg) 55%);
+}
+.nur-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+button { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, input:focus-visible, [tabindex]:focus-visible, a:focus-visible { outline: var(--fokus-ring); outline-offset: 2px; }
+.reiter[hidden], .blatt[hidden], .standort-frage[hidden], .liste[hidden] { display: none; }
+
+/* Kopfzeile */
+.kopf {
+  position: sticky; top: 0; z-index: 20;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--s1);
+  padding: var(--safe-top) var(--seite-rechts) 0 var(--seite-links);
+  min-height: calc(var(--kopf-hoehe) + var(--safe-top));
+  border-width: 0 0 1px 0; border-radius: 0;
+}
+.kopf-knopf {
+  inline-size: var(--tap); block-size: var(--tap); min-inline-size: var(--tap);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--akzent); border-radius: var(--r-button);
+  transition: opacity var(--dauer) var(--ease), transform var(--dauer) var(--ease);
+}
+.kopf-knopf svg, .zeile-ikon svg { inline-size: var(--ikon-groesse); block-size: var(--ikon-groesse); }
+.kopf-knopf:active { opacity: .6; transform: scale(.97); }
+.kopf-mitte { min-inline-size: 0; text-align: center; line-height: 1.15; padding-block: var(--s1); }
+.kopf-ort { font-size: var(--fs-title2); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kopf-stand { font-size: var(--fs-footnote); color: var(--nebentext); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+
+/* Inhalt und Reiter */
+.inhalt {
+  padding: var(--s3) var(--seite-rechts) calc(var(--leiste-hoehe) + var(--tabbar-unten) + var(--s6)) var(--seite-links);
+  min-height: calc(100dvh - var(--kopf-hoehe) - var(--safe-top));
+}
+.reiter { min-inline-size: 0; }
+.reiter:not(#reiter-graphs):not(#reiter-karte):not([hidden]) { animation: einblenden 160ms var(--ease); }
+@keyframes einblenden { from { opacity: 0; } }
+.module { min-inline-size: 0; }
+.quellen { margin: var(--s6) var(--s2) 0; font-size: var(--fs-footnote); color: var(--nebentext); max-inline-size: 65ch; line-height: var(--lh); }
+.hinweis { padding: var(--s4); color: var(--nebentext); max-inline-size: 65ch; }
+.hinweis-zeile { margin: var(--s2) var(--s1); min-block-size: 0; font-size: var(--fs-subhead); color: var(--nebentext); max-inline-size: 65ch; }
+.hinweis-zeile:empty { display: none; }
+
+/* Tab-Leiste: schwebende Pille */
+.tabbar-huelle {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: flex; justify-content: center; pointer-events: none;
+  padding: 0 var(--seite-rechts) var(--tabbar-unten) var(--seite-links);
+}
+.tabbar-huelle .tabbar {
+  position: relative; left: auto; right: auto; bottom: auto; top: auto;
+  pointer-events: auto;
+  inline-size: min(100%, var(--tabbar-breite)); min-block-size: var(--leiste-hoehe);
+  display: flex; align-items: stretch; gap: 0;
+  padding: var(--s1); justify-content: stretch;
+  border-radius: var(--r-chip);
+}
+.tabbar-huelle .tabbar button {
+  flex: 1 1 0; min-inline-size: 0; min-block-size: var(--tap);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 0 2px; border-radius: var(--r-chip);
+  font-size: var(--fs-caption); font-weight: 500; line-height: 1.15; color: var(--nebentext);
+  transition: opacity var(--dauer) var(--ease), transform var(--dauer) var(--ease);
+}
+.tabbar-huelle .tabbar button[aria-selected="true"] { color: var(--akzent); background: none; font-weight: 600; }
+.tabbar-huelle .tabbar button:active { opacity: .6; transform: scale(.97); }
+.tabbar-huelle .tabbar button:focus-visible { outline-offset: -2px; }
+.tabbar-huelle .tabbar svg { inline-size: var(--ikon-groesse); block-size: var(--ikon-groesse); flex: none; }
+.tabbar-huelle .tabbar button[aria-selected="true"] svg { fill: currentColor; fill-opacity: var(--tab-fuellung); }
+.tab-name {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden; text-overflow: ellipsis; text-align: center; max-inline-size: 100%;
+}
+
+/* Listen, Überschriften, Zeilen */
+.mehr-titel { margin: var(--s2) var(--s1) var(--s1); font-size: var(--fs-large-title); font-weight: 700; line-height: 1.1; }
+.gruppe-titel {
+  margin: var(--s6) var(--s4) var(--s2); font-size: var(--fs-caption); font-weight: 400; line-height: 1.2;
+  color: var(--nebentext); text-transform: uppercase; letter-spacing: .06em;
+}
+.liste { border-radius: var(--r-kachel); background: var(--bg-2); }
+.liste > * { min-block-size: var(--tap); }
+.liste-text > p { margin: 0; display: block; padding-block: var(--s3); font-size: var(--fs-subhead); line-height: var(--lh); max-inline-size: 65ch; }
+.zeile-knopf {
+  inline-size: 100%; text-align: start; color: var(--label); font-size: var(--fs-body);
+  transition: opacity var(--dauer) var(--ease);
+}
+.zeile-knopf:active { opacity: .6; }
+.zeile-ikon { display: inline-flex; color: var(--akzent); flex: none; }
+.zeile-text { flex: 1; min-inline-size: 0; overflow-wrap: break-word; }
+.zeile-pfeil { color: var(--nebentext); }
+.zeile-wahl { justify-content: space-between; flex-wrap: wrap; }
+
+/* Segmentwahl */
+.segment { display: inline-flex; background: var(--fuellung); border-radius: var(--r-button); padding: 0; flex: none; }
+.segment button {
+  min-block-size: var(--tap); min-inline-size: var(--tap); padding: 0 var(--s3);
+  border-radius: var(--r-button); font-size: var(--fs-subhead); font-weight: 500; color: var(--label);
+  transition: opacity var(--dauer) var(--ease);
+}
+.segment button[aria-checked="true"] { background: var(--akzent); color: var(--auf-akzent); font-weight: 600; }
+.segment button:active { opacity: .6; }
+.segment button:focus-visible { outline-offset: -2px; }
+
+/* Schalter (44 px Tippfläche) */
+.schalter {
+  position: relative; flex: none; inline-size: calc(var(--schalter-breite) + var(--s4)); block-size: var(--tap);
+  border-radius: var(--r-chip);
+}
+.schalter::before {
+  content: ""; position: absolute; inset-inline: var(--s2); inset-block: calc((var(--tap) - var(--schalter-hoehe)) / 2);
+  border-radius: var(--r-chip); background: var(--fuellung); border: 1px solid var(--nebentext);
+  transition: opacity var(--dauer) var(--ease);
+}
+.schalter[aria-checked="true"]::before { background: var(--akzent); border-color: var(--akzent); }
+.schalter-knauf {
+  position: absolute; inset-inline-start: calc(var(--s2) + 2px); inset-block-start: calc((var(--tap) - var(--schalter-knauf)) / 2);
+  inline-size: var(--schalter-knauf); block-size: var(--schalter-knauf); border-radius: var(--r-chip);
+  background: var(--bg-2); border: 1px solid var(--nebentext);
+  transition: transform var(--dauer) var(--ease);
+}
+.schalter[aria-checked="true"] .schalter-knauf { transform: translateX(calc(var(--schalter-breite) - var(--schalter-knauf) - 4px)); background: var(--auf-akzent); border-color: var(--auf-akzent); }
+.schalter:active .schalter-knauf { opacity: .8; }
+
+/* Knöpfe */
+.knopf-leise, .knopf-akzent {
+  min-block-size: var(--tap); padding: 0 var(--s5); border-radius: var(--r-button);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  font-size: var(--fs-body); font-weight: 600;
+  transition: opacity var(--dauer) var(--ease), transform var(--dauer) var(--ease);
+}
+.knopf-leise { background: var(--fuellung); color: var(--akzent); margin-block: var(--s3); }
+.knopf-akzent { background: var(--akzent); color: var(--auf-akzent); }
+.knopf-leise:active, .knopf-akzent:active { opacity: .6; transform: scale(.97); }
+.standort-frage { background: var(--bg-2); border-radius: var(--r-kachel); padding: var(--s4); margin-block: var(--s3); display: grid; gap: var(--s3); justify-items: start; }
+.standort-frage p { margin: 0; max-inline-size: 65ch; font-size: var(--fs-body); }
+
+/* Orte-Zeilen (Blatt und Mehr) */
+.liste > .ort-zeile { padding: 0 0 0 var(--s4); gap: var(--s1); }
+.ort-name {
+  flex: 1; min-inline-size: 0; min-block-size: var(--tap); display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+  text-align: start; color: var(--label); font-size: var(--fs-body); padding-block: var(--s1);
+  transition: opacity var(--dauer) var(--ease);
+}
+.ort-name:active { opacity: .6; }
+.ort-name small { font-size: var(--fs-footnote); color: var(--nebentext); }
+.ort-name span { overflow-wrap: anywhere; }
+body.blatt-offen { overflow: hidden; }
+.ort-name[aria-current="true"] span:first-child { font-weight: 700; }
+.ort-haken { color: var(--akzent); display: inline-flex; flex: none; }
+.ort-haken svg { inline-size: var(--ikon-groesse); block-size: var(--ikon-groesse); }
+.stern, .ort-entfernen {
+  min-inline-size: var(--tap); min-block-size: var(--tap); flex: none; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--akzent); border-radius: var(--r-button);
+  transition: opacity var(--dauer) var(--ease);
+}
+.stern:active, .ort-entfernen:active { opacity: .6; }
+.stern svg { inline-size: var(--ikon-groesse); block-size: var(--ikon-groesse); fill: none; stroke: currentColor; stroke-width: var(--strich); stroke-linejoin: round; }
+.stern[aria-pressed="true"] svg { fill: currentColor; }
+.ort-entfernen { padding: 0 var(--s3); font-size: var(--fs-subhead); font-weight: 500; }
+
+/* Blätter */
+.blatt {
+  position: fixed; inset: 0; z-index: var(--blatt-z);
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
+  animation: blatt-auf var(--dauer) var(--ease);
+}
+@keyframes blatt-auf { from { transform: translateY(24px); opacity: 0; } }
+.blatt-studio { z-index: calc(var(--blatt-z) + 10); }
+.blatt-kopf {
+  flex: none; min-block-size: var(--kopf-hoehe); display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  padding: 0 var(--rand) 0 var(--s4); border-bottom: 1px solid var(--trenner);
+}
+.blatt-titel { margin: 0; font-size: var(--fs-title2); font-weight: 700; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.blatt-titel:focus { outline: none; }
+.blatt-titel:focus-visible { outline: var(--fokus-ring); outline-offset: 2px; }
+.blatt-fertig {
+  min-inline-size: var(--tap); min-block-size: var(--tap); padding: 0 var(--s3); border-radius: var(--r-button);
+  color: var(--akzent); font-size: var(--fs-body); font-weight: 600; flex: none;
+  transition: opacity var(--dauer) var(--ease), transform var(--dauer) var(--ease);
+}
+.blatt-fertig:active { opacity: .6; transform: scale(.97); }
+.blatt-inhalt {
+  flex: 1; min-block-size: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--s3) var(--rand) calc(var(--safe-bottom) + var(--s6));
+}
+.suchfeld input {
+  inline-size: 100%; min-block-size: var(--tap); padding: 0 var(--s4);
+  font-size: var(--fs-body); color: var(--label); background: var(--bg-2);
+  border: 1px solid var(--trenner); border-radius: var(--r-button);
+  -webkit-appearance: none; appearance: none;
+}
+.suchfeld input::placeholder { color: var(--nebentext); opacity: 1; }
+.suchfeld input:focus-visible { outline: var(--fokus-ring); outline-offset: 2px; }
+#studio-wurzel { flex: 1; min-block-size: 0; position: relative; overflow: hidden; padding-bottom: var(--safe-bottom); }
+
+/* Offline-Hinweis über dem Karten-Blatt (der Kartenbaustein zeigt ohne Netz nur eine leere Fläche) */
+.offline-pille {
+  position: fixed; z-index: calc(var(--blatt-z) - 5); pointer-events: none;
+  inset-inline: max(var(--s4), var(--safe-left)) max(var(--s4), var(--safe-right));
+  top: calc(var(--safe-top) + var(--kopf-hoehe) + var(--s3));
+  padding: var(--s2) var(--s4); border-radius: var(--r-kachel); text-align: center;
+  font-size: var(--fs-footnote); color: var(--label);
+}
+.offline-pille[hidden] { display: none; }
+
+/* Bausteine (Dateien der Bausteine bleiben unverändert, Anpassungen nur hier) */
+#graphs .mg-btn, #graphs .mg-tab, #start-meteogramm .mg-btn { min-height: var(--tap); min-width: var(--tap); }
+/* kein Text unter 11 px (der Baustein setzt 9–10,5 px für Einheiten, Marken und Tagesinfos) */
+/* 0,6875 rem = 11 px bei 16 px Basis, wächst mit der Schriftgröße */
+.mg .mg-ax-titel small, .mg .mg-zeilen-panel h4 small, .mg .mg-svg .mg-mark, .mg .mg-svg .mg-sonne, .mg .mg-svg .mg-tagesinfo, .mg .mg-wv small { font-size: 0.6875rem; }
+#karte .wk-ticks, #karte .wk-quelle, #karte .wk-legende { font-size: 0.6875rem; }
+/* Wertemarke an der Achse: der Baustein färbt die Zahl in der Linienfarbe (hell nur 2,4:1), Text in --label, Ring neutral */
+.mg .mg-ax-wert { color: var(--label) !important; box-shadow: 0 0 0 1px var(--mg-text-still); }
+/* Start-Kachel: der Baustein hat margin: 0 auto, im Spaltenlayout der Kachel schrumpft er dadurch auf die Breite seines Inhalts (Millionen Pixel); Breite der Kachel erzwingen */
+#start-meteogramm { inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; margin: 0; overflow: hidden; contain: inline-size; }
+#start-meteogramm .mg-top, #start-meteogramm .mg-readout, #start-meteogramm .mg-werte, #start-meteogramm .mg-knoepfe, #start-meteogramm .mg-ecke-halter, #start-meteogramm .mg-foot { display: none; }   /* Modellwahl, Werteliste, Knopfleiste, Zoom, Hinweis, Quelle (steht am Seitenende) */
+#karte.wk { --wk-hoehe: calc(100dvh - var(--kopf-hoehe) - var(--safe-top) - var(--leiste-hoehe) - var(--tabbar-unten) - var(--s8) - var(--s8)); }
+
+/* Querformat (iPhone liegend) */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root { --tabbar-breite: 480px; --leiste-hoehe: 44px; --tabbar-unten: max(var(--s1), var(--safe-bottom)); }
+  .kopf { min-height: calc(40px + var(--safe-top)); padding-inline: var(--seite-links) var(--seite-rechts); }
+  .kopf-knopf { margin-block: -2px; }   /* Tippfläche bleibt 44 px, die Leiste 40 px */
+  .kopf-mitte { padding-block: 0; line-height: 1.1; }
+  .kopf-ort { font-size: var(--fs-body); }
+  .tabbar-huelle .tabbar button { flex-direction: row; gap: var(--s2); }
+  .tabbar-huelle .tabbar { padding: 0 var(--s1); }
+  .inhalt { min-height: calc(100dvh - 40px - var(--safe-top)); }
+  .blatt-kopf { min-block-size: 40px; }
+  #karte.wk { --wk-hoehe: calc(100dvh - 40px - var(--safe-top) - var(--leiste-hoehe) - var(--tabbar-unten) - var(--s8)); min-height: 200px; }
+}
+
+/* Große Schrift (data-schrift setzt app.js nach der gemessenen Schriftgröße) */
+html[data-schrift="130"] .tabbar-huelle .tabbar button, html[data-schrift="150"] .tabbar-huelle .tabbar button { padding: 0 1px; }
+html[data-schrift="150"] .tabbar-huelle .tabbar button:not([aria-selected="true"]) .tab-name {
+  position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+html[data-schrift="150"] .tabbar-huelle .tabbar button[aria-selected="true"] { flex-grow: 2.5; }
+html[data-schrift="130"] .zeile-wahl, html[data-schrift="150"] .zeile-wahl { row-gap: var(--s2); }
+html[data-schrift="150"] .segment { flex-wrap: wrap; }
+
+/* Bewegung und Transparenz */
+@media (prefers-reduced-motion: reduce) {
+  .blatt { animation: blatt-einblenden 160ms linear; }
+  .reiter:not(#reiter-graphs):not(#reiter-karte):not([hidden]) { animation-duration: 160ms; }
+  .kopf-knopf, .tabbar-huelle .tabbar button, .knopf-leise, .knopf-akzent, .blatt-fertig, .segment button, .schalter-knauf { transition: opacity 160ms linear; transform: none !important; }
+  .schalter[aria-checked="true"] .schalter-knauf { transform: translateX(calc(var(--schalter-breite) - var(--schalter-knauf) - 4px)) !important; }
+  @keyframes blatt-einblenden { from { opacity: 0; } }
+}

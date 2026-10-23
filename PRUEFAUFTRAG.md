@@ -1,0 +1,50 @@
+# Prüfauftrag nach dem Bau: Wetterlage
+
+Erzeugt am 23.10.2026 mit dem Design-Konfigurator. Gebaut wird nicht in einem Durchgang: Dieser Auftrag ist der Prüfschritt danach. **Fertig melden darf nur, wer die Abnahmeliste unten ausgefüllt hat.** Was nicht geprüft wurde, steht dort als „nicht geprüft“, nicht als „ja“. Fehlschläge mit der echten Ausgabe zeigen.
+
+## 1. Bildschirmfoto jedes Reiters
+
+Reiter dieser App: Wetter, Graphs, Karten, Rad/Sat, Mehr. Mit Playwright (WebKit, wie Safari) von jedem Reiter ein Bildschirmfoto, Ablage `pruefung/<reiter>-<gerät>-<hell|dunkel>.png`:
+
+| Gerät | Fenstergröße | Darstellung |
+|---|---|---|
+| iPhone | 390 × 844 | hell und dunkel (`colorScheme`) |
+
+Jedes Bild **ansehen**, nicht nur erzeugen: nichts ragt heraus, nichts überlappt, keine leere Fläche, keine Fehlermeldung statt Inhalt, kleinste Schrift mindestens 11 px, Tippflächen mindestens 44 px. Reiter mit Karte oder Diagramm erst fotografieren, wenn die Daten da sind (oder der Hinweis „keine Verbindung“ steht).
+
+## 2. Vergleich mit der Vorschau des Konfigurators
+
+Die Vorschau im Konfigurator ist der Maßstab. Sie lässt sich nicht als Bild mitliefern (sie ist lebendes HTML); darum liefert dieser Link sie mit genau diesen Einstellungen. Im Browser öffnen, Gerät und Hell/Dunkel wie oben wählen, jeden Reiter fotografieren und neben das Foto der gebauten App legen:
+
+https://design-konfigurator.stephanhandel.workers.dev/#c=eyJzdGltbXVuZyI6NTAsImRpY2h0ZSI6NTYsImJld2VndW5nIjoiYXBwbGUiLCJyYW5kIjo4LCJyYWRpdXMiOjE2LCJmb250Ijoic3lzdGVtIiwiZGlzcGxheSI6Im5vbmUiLCJyYXRpbyI6ImFwcGxlIiwiYmFzaXMiOjE3LCJha3plbnQiOiIjRkZENjMzIiwiZmFyYmVuIjoiZmFyYmlnIiwidGFnZVRpbnQiOnRydWUsInRhZ2VTdGFlcmtlIjoyLjUsInRhZ2VNb2R1cyI6IndlY2hzZWwiLCJlcnNjaGVpbnVuZyI6ImF1dG8iLCJoaW50ZXJncnVuZCI6InZlcmxhdWYiLCJ3ZXR0ZXJsYWdlIjoia2xhciIsInRvb2xiYXIiOiJ1bnRlbiIsInRhYnMiOlsid2V0dGVyIiwiZ3JhcGhzIiwia2FydGVuIiwicmFkc2F0IiwibWVociJdLCJsdWZ0U3RpbCI6InJpbmciLCJsdWZ0UG9zIjoiaGVybyIsIm1vbmRTdGlsIjoiemVpbGUiLCJtb25kUG9zIjoibGlzdGUiLCJpY29uU2V0IjoiZ2VmdWVsbHQiLCJzdHJpY2giOjEuNSwid2V0dGVyU2V0Ijoia2xhc3Npc2NoIiwidWlTZXQiOiJsdWNpZGUiLCJha3plbnQyIjoiI0ZGRDYzMyIsImZsYWVjaGUiOiIjMTIzMDVFIiwiYW5vcmRudW5nIjoid2V0dGVycHJvIiwic3ltYm9sVGF1c2NoIjp7Im5lYmVsIjoic2F0ejprcmFlZnRpZyJ9LCJoaW1tZWxTdGlsIjoibmF0dXIiLCJlZmZTb25uZSI6dHJ1ZSwiZWZmV29sa2VuIjp0cnVlLCJlZmZOaWVkZXJzY2hsYWciOnRydWUsImVmZlN0ZXJuZSI6dHJ1ZSwiYWJkdW5rZWxuIjoyMCwiYmlsZFF1ZWxsZSI6ImhpbW1lbCIsImtvcGZGb3JtIjoibGVpc3RlIiwia29wZkhvZWhlIjo0NCwibGVpc3RlRm9ybSI6InBpbGxlIiwibGVpc3RlSG9laGUiOjYwLCJsZWlzdGVUZXh0IjoiaW1tZXIiLCJsZWlzdGVNYXJrZSI6ImZhcmJlIiwiZ2xhc1RpdGVsIjp0cnVlLCJnbGFzVGFicyI6dHJ1ZSwiZ2xhc0tub2VwZmUiOnRydWUsImdsYXNLYWNoZWxuIjp0cnVlLCJnbGFzQmx1ciI6MTQsImdsYXNEZWNra3JhZnQiOjYxLCJnbGFzRmFyYmUiOjE3MCwiZ2xhc1RvbiI6Im5ldXRyYWwiLCJnbGFzUmFuZCI6dHJ1ZSwiYWJzdGFuZEdsb2JhbCI6MTAwLCJrYWNoZWxBYnN0YW5kIjo1LCJrb250cmFzdFN0dWZlIjoic3RhbmRhcmQiLCJzeW1ib2xHcm9lc3NlIjoxMDAsImlrb25Hcm9lc3NlIjoxMDAsIm1vZEFrdHVlbGwiOnRydWUsIm1vZFN0dW5kZW4iOnRydWUsIm1vZFRhZ2UiOnRydWUsIm1vZEthcnRlIjp0cnVlLCJzcFp1c2F0eiI6dHJ1ZSwic3BMdWZ0Ijp0cnVlLCJzcE1vbmQiOmZhbHNlLCJzcFdpbmQiOnRydWUsImFrR2VmdWVobHQiOnRydWUsImFrVGF1cHVua3QiOnRydWUsImFrRmV1Y2h0ZSI6dHJ1ZSwiYWtEcnVjayI6dHJ1ZSwiYWtXaW5kIjp0cnVlLCJha1JlZ2VuIjp0cnVlLCJ0ZWlsZW4iOnRydWUsInRlaWxlbk9ydCI6ImtvcGYiLCJ0ZWlsZW5TdGlsIjoiZ2xhcyIsInRlaWxlblBvcyI6Im9iZW4iLCJ0ZWlsZW5Ub24iOiJhdXRvIiwidGVpbGVuRm9ybWF0Ijoib3JpZ2luYWwiLCJ0ZWlsZW5Lbm9lcGZlIjoia2FtZXJhIiwidGVpbGVuV2FobCI6dHJ1ZSwidGlPcnQiOnRydWUsInRpV2luZCI6dHJ1ZSwidGlSZWdlbiI6dHJ1ZSwidGlTb25uZSI6dHJ1ZSwidGlNYXJrZSI6dHJ1ZSwiYWt0UmFkYXIiOnRydWUsImFrdFdlYmNhbSI6dHJ1ZSwiYXBwTmFtZSI6IldldHRlcmxhZ2UiLCJhcHBLdXJ6IjoiIiwiaWNvbk1vdGl2IjoiemVpY2hudW5nIiwiaWNvbkFydCI6InNvbm5ld29sa2UiLCJpY29uSGciOiJuYWNodCIsImljb25Hcm9lc3NlIjo2NSwiaWNvbkdsYW56IjpmYWxzZSwiYXBwVHlwIjoicHdhIiwib3JkbmVyIjoifi9LSSBQcm9qZWt0ZS9XZXR0ZXIgQXBwcy9XZXR0ZXJsYWdlIiwiaG9zdGluZyI6ImdpdGh1YiIsInppZWxHZXJhZXRlIjoiaXBob25lIiwibm90aXplbiI6e30sImthbVRhYiI6ZmFsc2UsInRlaWxlbkdyb2Vzc2UiOjEwODAsInRlaWxlbkRhdGVpIjoicG5nIiwidGVpbGVuUXVhbGl0YWV0Ijo5MCwidGlJbmZvcyI6WyJ0ZW1wIiwic3ltYm9sIiwib3J0IiwiZGF0dW0iLCJ3aW5kIiwicmVnZW4iLCJzb25uZSJdLCJ0aU9ydFN0dWZlIjoic3RhZHQiLCJ0aVRleHQiOiIiLCJ0ZWlsZW5Mb2dvIjoiYXBwbmFtZSIsInRlaWxlblBhcnRuZXIiOnRydWUsIndlYmNhbSI6dHJ1ZSwid2ViY2FtTGFnZSI6ImFrdHVlbGwiLCJ3ZWJjYW1RdWVsbGUiOiJvc3RzdGFkdCIsIndlYmNhbUFuc2ljaHQiOiJzdHVuZGUiLCJ3ZWJjYW1UZWlsZW4iOmZhbHNlLCJkYXRlblF1ZWxsZSI6Im9wZW4tbWV0ZW8iLCJzdGFydE9ydCI6Ik1hbm5oZWltIiwic3RhcnRMYXQiOjQ5LjQ4NzUsInN0YXJ0TG9uIjo4LjQ2Niwib3J0ZUxpc3RlIjoiTWFubmhlaW0sIE1lbmdlcnNjaGllZCwgQ29ycmFsZWpvIiwiZmF2b3JpdGVuIjp0cnVlLCJncHMiOnRydWUsIndldHRlck1vZGVsbCI6Im1peCIsIm1vZGVsbEtvcGYiOmZhbHNlLCJlaW5oZWl0V2luZCI6ImttaCIsImVpbmhlaXRUZW1wIjoiYyIsInN0dW5kZW5UYWt0IjoiNiIsInZvcmhlcnNhZ2VUYWdlIjoiOCIsInF1ZWxsZW5BdXRvIjp0cnVlLCJ0YWJHcmFwaHMiOiJtZXRlb2dyYW1tIiwibWdTb25uZSI6dHJ1ZSwibWdUZW1wIjp0cnVlLCJtZ1dpbmQiOnRydWUsIm1nUmVnZW4iOnRydWUsIm1nVXYiOnRydWUsIm1nRmV1Y2h0ZSI6dHJ1ZSwibWdXb2xrZW4iOnRydWUsIm1nRHJ1Y2siOnRydWUsImthVGVtcCI6dHJ1ZSwia2FSZWdlbiI6dHJ1ZSwia2FXaW5kIjp0cnVlLCJrYVdvbGtlbiI6dHJ1ZSwia2FJc29iYXJlbiI6ZmFsc2UsImthTWFya2VuIjp0cnVlLCJrYXJ0ZW5HcnVuZCI6Im9wZW50b3BvbWFwIiwicnNSYWRhciI6dHJ1ZSwicnNTYXRGYXJiZSI6dHJ1ZSwicnNTYXRJciI6dHJ1ZSwicnNTYXRSZWdlbiI6dHJ1ZSwicnNSdWVja2JsaWNrIjoiMiIsInJzVGFrdCI6IjEwIiwibWVoclN1Y2hlIjp0cnVlLCJtZWhyT3J0ZSI6dHJ1ZSwibWVockRhcnN0ZWxsdW5nIjp0cnVlLCJtZWhyUXVlbGxlbiI6dHJ1ZSwiYmVzY2hyaWZ0dW5nWndlaXRmYXJiZSI6dHJ1ZSwiaGV1dGVCYWxrZW4iOnRydWUsInN0dW5kZW5TcGFsdGVuIjoiMyIsIm1vZHVsZSI6W3siaWQiOiJ3ZWJjYW0iLCJncm9lc3NlIjoibWl0dGVsIiwiYW4iOnRydWV9LHsiaWQiOiJ0ZWlsZW5jaGlwIiwiZ3JvZXNzZSI6Imdyb3NzIiwiYW4iOnRydWV9LHsiaWQiOiJ3YXJudW5nIiwiZ3JvZXNzZSI6Imdyb3NzIiwiYW4iOnRydWV9LHsiaWQiOiJha3R1ZWxsIiwiZ3JvZXNzZSI6Imdyb3NzIiwiYW4iOnRydWV9LHsiaWQiOiJzdHVuZGVuIiwiZ3JvZXNzZSI6Im1pdHRlbCIsImFuIjp0cnVlfSx7ImlkIjoibWV0ZW9ncmFtbSIsImdyb2Vzc2UiOiJrbGVpbiIsImFuIjp0cnVlfSx7ImlkIjoidGFnZSIsImdyb2Vzc2UiOiJncm9zcyIsImFuIjp0cnVlfSx7ImlkIjoibHVmdCIsImdyb2Vzc2UiOiJtaXR0ZWwiLCJhbiI6dHJ1ZX0seyJpZCI6InRpcHBzIiwiZ3JvZXNzZSI6Imdyb3NzIiwiYW4iOnRydWV9LHsiaWQiOiJzb25uZSIsImdyb2Vzc2UiOiJncm9zcyIsImFuIjp0cnVlfSx7ImlkIjoibW9uZCIsImdyb2Vzc2UiOiJncm9zcyIsImFuIjp0cnVlfSx7ImlkIjoid2luZCIsImdyb2Vzc2UiOiJncm9zcyIsImFuIjp0cnVlfSx7ImlkIjoicmFkYXIiLCJncm9lc3NlIjoiZ3Jvc3MiLCJhbiI6dHJ1ZX0seyJpZCI6InBvbGxlbiIsImdyb2Vzc2UiOiJncm9zcyIsImFuIjp0cnVlfV0sIm1nWmVpbGVuIjpbInNvbm5lIiwidGVtcCIsIndpbmQiLCJyZWdlbiIsIndvbGtlbiIsImZldWNodGUiLCJ1diIsImRydWNrIl0sIm1nV2VydGVLbHVnIjpmYWxzZSwibWdXZXJ0ZVBhYXJlIjp0cnVlLCJ0aXBwc0F1c3dhaGwiOlsidXYiLCJzY2hpcm0iLCJnb2xkZW4iLCJzdGVybmUiLCJmcm9zdCIsImhpdHplIl0sInJlZ2VuMmgiOiJiZWlkZXMiLCJ0ZW1wZXJhdHVyIjo1MCwiY2hyb21hIjo1MCwic2NoYXR0ZW4iOjUwLCJuYW1lbkVpZ2VuZSI6W10sInJlcG8iOiJ3ZXR0ZXJsYWdlIiwiZ2hLb250byI6InN0ZXBoYW5kZWwiLCJhcHBWZXJzaW9uIjoiMC45LjAiLCJkZXNpZ25WZXJzaW9uIjoxLCJvcmRuZXJOZXUiOnRydWUsImhpbW1lbEtvcGYiOmZhbHNlLCJudXR6ZXJGYXJiZSI6ImF1cyIsImF1ZmJhdSI6InJlaXRlciIsImtzVmFyaWFudGUiOiJidWVobmUiLCJrc0Z1bmt0aW9uZW4iOiJ2MTpkZmZmZmRmZmVmZjUzMGUiLCJpY29uWiI6InNvbm5lIiwiaWNvbkZhcmJlIjoib3JpZ2luYWwiLCJpY29uRmFyYmVGcmVpIjoiI0ZGRkZGRiIsImljb25IZ0ZyZWkiOiIjMUE1RkI0IiwiaWNvbkhnU3RpbCI6InZlcmxhdWYiLCJpY29uWCI6MCwiaWNvblkiOjAsInZvbGxiaWxkS25vcGYiOnRydWUsInZvbGxiaWxkSW1tZXIiOnRydWV9
+
+Verglichen werden: Farben (Akzent, Flächen, Tageszeilen, Zweitfarbe), Anordnung und Abstände, Schrift und Schriftgrößen, Tab-Leiste, Symbole, bei Graphs das Diagramm (Zeilen, Reihenfolge), bei Karten und Rad/Sat die Ebenenleiste und Zeitleiste. Eine Abweichung ist ein Fehler der App, es sei denn, `DESIGN.md` nennt den Grund. Was die Vorschau je Reiter zeigt, steht im Abschnitt „Daten, Orte und Reiter“ der `DESIGN.md`.
+
+## 3. ux-check
+
+Den Skill `ux-check` auf die fertige App laufen lassen (Tippflächen, Schrift, Kontrast, Safe Areas, Manifest, Barrierefreiheit, Anfragen an fremde Server). Jeden Fund beheben oder mit Begründung stehen lassen.
+
+## 4. Offline-Test
+
+Die App einmal mit Netz laden, dann das Netz abschalten (Playwright `context.setOffline(true)`) und neu laden: Die Hülle (Seite, Schrift, Symbole) kommt aus dem Service Worker, jeder Reiter zeigt Inhalt oder einen verständlichen Hinweis, nichts bleibt leer, es gibt keinen Absturz.
+
+## 5. Abnahmeliste (ausgefüllt in den Bericht kopieren)
+
+| Prüfpunkt | ja / nein / nicht geprüft |
+|---|---|
+| Reiter Wetter sieht aus wie die Vorschau (iPhone hell und dunkel) | |
+| Reiter Graphs sieht aus wie die Vorschau (iPhone hell und dunkel) | |
+| Reiter Karten sieht aus wie die Vorschau (iPhone hell und dunkel) | |
+| Reiter Rad/Sat sieht aus wie die Vorschau (iPhone hell und dunkel) | |
+| Reiter Mehr sieht aus wie die Vorschau (iPhone hell und dunkel) | |
+| Diagramm im Reiter Graphs: Zeilen und Reihenfolge wie im Konfigurator (Baustein über `bausteine-einbau.js`, nicht nachgebaut) | |
+| Karte: nur die gewählten Ebenen sind zu sehen, Radar zoomt nicht über Stufe 7 hinaus | |
+| Vollbild öffnen und schließen auf 390 und 1280 px (Graphs, Karten, Rad/Sat): Blatt füllt den Bildschirm, „Fertig“, Esc und Zurück schließen; „immer im Vollbild“ öffnet die Reiter gleich als Blatt | |
+| Dunkelmodus gesehen, kein Text unlesbar | |
+| 390 px Breite: kein seitliches Scrollen | |
+| Schriftgröße 130 % und 150 %: nichts ragt heraus | |
+| `ux-check` ohne offene Funde | |
+| Offline-Test bestanden | |
+| Bausteine unverändert (Dateien aus dem Paket, keine eigene Kopie) | |
+
+Alles „ja“: fertig melden mit **Geändert / Geprüft / Offen**. Ein „nein“ wird behoben und der Punkt erneut geprüft. Was nur auf einem echten Gerät prüfbar ist (iPhone, Kamera, echtes Netz), steht unter „Offen“.

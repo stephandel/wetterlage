@@ -1,0 +1,143 @@
+/* tokens.css – erzeugt vom Design-Konfigurator am 23.10.2026
+   Ersetzt die Variablenwerte aus apple-ui/base.css. Nach base.css einbinden.
+   Vorrang: Die Werte hier gelten vor den Standardwerten aus base.css, auch bei der Schriftskala.
+   Stimmung: ausgewogen, normal, mit Apple-Bewegung */
+
+:root {
+  /* Schrift */
+  --font: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-display: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --fs-large-title: 2.125rem;   /* 34 px */
+  --fs-title1: 1.75rem;        /* 28 px */
+  --fs-title2: 1.375rem;        /* 22 px */
+  --fs-title3: 1.25rem;        /* 20 px */
+  --fs-body: 1.0625rem;          /* 17 px */
+  --fs-subhead: 0.9375rem;       /* 15 px */
+  --fs-footnote: 0.8125rem;      /* 13 px */
+  --fs-caption: 0.75rem;       /* 12 px */
+  --fs-hero: 6.3125rem;          /* 101 px */
+  --lh: 1.36;
+  --typo-ratio: apple; /* feste Apple-Stufen statt Faktor */
+
+  /* Abstände (Dichte × 1.00) */
+  --s1: 4px;   --s2: 8px;   --s3: 12px;   --s4: 16px;   --s5: 20px;   --s6: 24px;   --s8: 32px;
+  --tap: 44px;
+  --rand: 8px;
+  --kachel-abstand: 5px;   /* Lücke zwischen den Kacheln */
+  --abstand-faktor: 1;   /* schon in --s1 … --s8 eingerechnet */
+  --sym-groesse: 30px;   /* Wettersymbol in Listen; Aktuell 112 px, Stunden 60 px */
+  --ikon-groesse: 24px;   /* Bedien-Symbole */
+  --r-kachel: 16px; --r-button: 12px; --r-chip: 999px;
+
+  /* Stimmung (ausgewogen (50 von 100 zwischen seriös und verspielt), Farbton neutral, Farbigkeit normal (100 % Farbkraft), Schatten mittel) */
+  --stimmung: 50;             /* 0 seriös … 100 verspielt */
+  --farbton-verschiebung: 0deg;   /* schon in alle Farben eingerechnet; minus = wärmer */
+  --farbigkeit: 1.00;        /* Faktor für die Chroma (OKLCH), schon eingerechnet */
+  --schatten-staerke: 1.00;  /* 0 = keine, 1 = normal, 2 = doppelt */
+  --schatten-knopf: none;
+
+  /* Bewegung */
+  --dauer: 280ms;
+  --ease: cubic-bezier(.32,.72,0,1);
+
+  /* Symbole */
+  --strich: 1.5;
+  --ikon-set: gefuellt;
+  --wetter-symbole: klassisch;
+
+  /* Glas */
+  --glas-blur: 14px;
+  --glas-saettigung: 170%;
+
+  /* Tagesfarben: wechsel, Stärke 2.5 % */
+  --tag-staerke: 2.5;
+
+  /* Himmel nach Wetterlage */
+  --himmel-klar: linear-gradient(180deg, #2F7FE0 0%, #6FB1F0 52%, #BFE0F7 100%);
+  --himmel-daemmerung: linear-gradient(180deg, #26346B 0%, #A85A86 52%, #F2A766 100%);
+  --himmel-bewoelkt: linear-gradient(180deg, #4F6378 0%, #7B8C9E 52%, #A9B6C2 100%);
+  --himmel-nebel: linear-gradient(180deg, #56626D 0%, #7F8A94 52%, #A7B0B7 100%);
+  --himmel-regen: linear-gradient(180deg, #2E3B4D 0%, #4F6075 52%, #7A8A9C 100%);
+  --himmel-gewitter: linear-gradient(180deg, #1B1D31 0%, #35324F 52%, #5F5672 100%);
+  --himmel-schnee: linear-gradient(180deg, #566F8A 0%, #8299B0 52%, #B4C4D3 100%);
+  --himmel-nacht: linear-gradient(180deg, #070B1F 0%, #151C3F 52%, #2A3463 100%);
+  --hintergrund-modus: verlauf;
+  --abdunkeln: 0.2;
+  --kopf-hoehe: 44px;
+  --leiste-hoehe: 60px;
+
+  /* Safe Areas */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Hell */
+  --akzent: #7B660C;            /* oklch(51.6% 0.102 94) */
+  --akzent-hover: #645304;
+  --akzent-tint: #F5EBC9;      /* zarte Fläche, z. B. ausgewählte Zeile */
+  --akzent-fuellung: color-mix(in srgb, var(--akzent) 20%, transparent);
+  --auf-akzent: #FFFFFF;       /* Text auf Akzentfläche, 5,6:1 */
+  --bg: #E0ECFE;
+  --bg-2: #F7FAFF;
+  --label: #0C1626;
+  --label-2: rgba(60,60,67,0.74);
+  --label-3: rgba(60,60,67,.3);
+  --trenner: rgba(60,60,67,.29);
+  --fuellung: rgba(120,120,128,.2);
+  --glas-bg: rgba(255,255,255,0.61);
+  --glas-rand: rgba(255,255,255,.4);
+  --glas-schatten: 0 8px 32px rgba(0,0,0,0.13);
+  --akzent-2: #87721F;        /* Zweitfarbe für hervorgehobene Werte */
+  --schatten: none;
+  --gruen: #2DA44E; --orange: #E8841A; --rot: #D9342B;
+  --tag-a: #F7FAFF;
+  --tag-b: #EFF2F7;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --akzent: #FFD633;            /* oklch(88.6% 0.170 94) */
+    --akzent-hover: #FFEDB1;
+    --akzent-tint: #322803;      /* zarte Fläche, z. B. ausgewählte Zeile */
+    --akzent-fuellung: color-mix(in srgb, var(--akzent) 20%, transparent);
+    --auf-akzent: #000000;       /* Text auf Akzentfläche, 14,9:1 */
+    --bg: #052350;
+    --bg-2: #1A3867;
+    --label: #FFFFFF;
+    --label-2: rgba(255,255,255,.72);
+    --label-3: rgba(255,255,255,.45);
+    --trenner: rgba(255,255,255,.22);
+    --fuellung: rgba(255,255,255,.16);
+    --glas-bg: rgba(28,28,30,0.61);
+    --glas-rand: rgba(255,255,255,.15);
+    --glas-schatten: 0 8px 32px rgba(0,0,0,.35);
+    --akzent-2: #FFD633;        /* Zweitfarbe für hervorgehobene Werte */
+    --schatten: none;
+    --gruen: #30D158; --orange: #FF9F0A; --rot: #FF453A;
+    --tag-a: #1A3867;
+    --tag-b: #143160;
+  }
+}
+
+@media (min-width: 768px) { :root { --rand: 12px; } }
+@media (prefers-reduced-motion: reduce) { :root { --dauer: 0ms; } }
+
+/* Glas: nur auf schwebenden Flächen (Kopfzeile, Tab-Leiste, Knöpfe und Chips, Kacheln) */
+.glas {
+  background: var(--glas-bg);
+  border: 1px solid var(--glas-rand);
+  box-shadow: var(--glas-schatten);
+  -webkit-backdrop-filter: blur(var(--glas-blur)) saturate(var(--glas-saettigung));
+  backdrop-filter: blur(var(--glas-blur)) saturate(var(--glas-saettigung));
+}
+@supports not (backdrop-filter: blur(1px)) { .glas { background: color-mix(in srgb, var(--bg-2) 92%, transparent); } }
+@media (prefers-reduced-transparency: reduce) { .glas { background: var(--bg-2); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+
+/* Nutzung der Tagesfarben in einer Liste */
+.liste > .tag:nth-child(odd)  { background: var(--tag-a); }
+.liste > .tag:nth-child(even) { background: var(--tag-b); }
+
+/* Schatten nur auf Kacheln und Knöpfen */
+.kachel { box-shadow: var(--schatten); }
+.button, .chip { box-shadow: var(--schatten-knopf); }

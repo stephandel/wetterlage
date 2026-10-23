@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wetterlage</title>
+<meta name="theme-color" content="#7B660C" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#FFD633" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Wetterlage">
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="lib/leaflet.css">
+<link rel="stylesheet" href="meteogramm.css">
+<link rel="stylesheet" href="lib/wpkarte.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="module.css">
+</head>
+<body>
+
+<header class="kopf glas" id="kopf">
+  <button type="button" class="kopf-knopf" id="knopf-orte" data-ikon="sliders" aria-label="Orte"></button>
+  <div class="kopf-mitte">
+    <div class="kopf-ort" id="kopf-ort">Wetterlage</div>
+    <div class="kopf-stand" id="kopf-stand" aria-live="polite">Lädt …</div>
+  </div>
+  <button type="button" class="kopf-knopf" id="knopf-suche" data-ikon="search" aria-label="Ort suchen"></button>
+  <button type="button" class="kopf-knopf" id="knopf-teilen" data-ikon="share" aria-label="Wetterfoto teilen"></button>
+</header>
+
+<main id="inhalt" class="inhalt">
+  <section id="reiter-wetter" class="reiter" role="tabpanel" aria-labelledby="tab-wetter" hidden>
+    <div id="module" class="module"></div>
+    <p class="quellen">Wetterdaten: Open-Meteo.com (CC BY 4.0) · Warnungen: DWD über Bright Sky · Luft und Pollen: Open-Meteo Air Quality (CAMS) · Radar: RainViewer · Karte: © OpenStreetMap-Mitwirkende</p>
+  </section>
+  <section id="reiter-graphs" class="reiter" role="tabpanel" aria-labelledby="tab-graphs" hidden>
+    <div id="graphs" class="mg"></div>
+    <p class="quellen">Wetterdaten: Open-Meteo.com (CC BY 4.0)</p>
+  </section>
+  <section id="reiter-karte" class="reiter" role="tabpanel" aria-labelledby="tab-karten" hidden>
+    <div id="karte" class="wk"></div>
+    <p class="quellen">Karte: © OpenStreetMap-Mitwirkende, OpenTopoMap (CC BY-SA) · Radar: RainViewer · Satellit: EUMETSAT · Wetterdaten: Open-Meteo.com</p>
+  </section>
+  <section id="reiter-mehr" class="reiter" role="tabpanel" aria-labelledby="tab-mehr" hidden>
+    <h1 class="mehr-titel">Wetterlage</h1>
+
+    <h2 class="gruppe-titel">Ortssuche</h2>
+    <div class="liste">
+      <button type="button" class="zeile-knopf" id="mehr-suchen"><span data-ikon="search" class="zeile-ikon"></span><span class="zeile-text">Ort suchen</span><span data-ikon="chevron" class="zeile-ikon zeile-pfeil"></span></button>
+    </div>
+
+    <h2 class="gruppe-titel">Orte und Favoriten</h2>
+    <div class="liste" id="mehr-orte"></div>
+
+    <h2 class="gruppe-titel">Darstellung</h2>
+    <div class="liste">
+      <div class="zeile-wahl">
+        <span class="zeile-text" id="lbl-temp">Temperatur</span>
+        <div class="segment" id="seg-temp" role="radiogroup" aria-labelledby="lbl-temp">
+          <button type="button" role="radio" aria-checked="false" data-wert="c">°C</button>
+          <button type="button" role="radio" aria-checked="false" data-wert="f">°F</button>
+        </div>
+      </div>
+      <div class="zeile-wahl">
+        <span class="zeile-text" id="lbl-wind">Wind</span>
+        <div class="segment" id="seg-wind" role="radiogroup" aria-labelledby="lbl-wind">
+          <button type="button" role="radio" aria-checked="false" data-wert="kmh">km/h</button>
+          <button type="button" role="radio" aria-checked="false" data-wert="ms">m/s</button>
+          <button type="button" role="radio" aria-checked="false" data-wert="mph">mph</button>
+        </div>
+      </div>
+      <div class="zeile-wahl">
+        <span class="zeile-text" id="lbl-vollbild">Meteogramm und Karten immer im Vollbild</span>
+        <button type="button" class="schalter" id="schalter-vollbild" role="switch" aria-checked="false" aria-labelledby="lbl-vollbild"><span class="schalter-knauf"></span></button>
+      </div>
+    </div>
+
+    <h2 class="gruppe-titel">Quellen</h2>
+    <div class="liste liste-text">
+      <p>Wetterdaten: Open-Meteo.com (CC BY 4.0)</p>
+      <p>Karte: © OpenStreetMap-Mitwirkende, OpenTopoMap (CC BY-SA)</p>
+      <p>Radar: RainViewer</p>
+      <p>Satellit: EUMETSAT</p>
+      <p>Warnungen: Deutscher Wetterdienst über Bright Sky</p>
+      <p>Luft und Pollen: Open-Meteo Air Quality (CAMS)</p>
+      <p>Geocoding: Open-Meteo</p>
+    </div>
+
+    <h2 class="gruppe-titel">Über</h2>
+    <div class="liste liste-text">
+      <p id="ueber-version">Version 0.9.0</p>
+      <p>Design-Version 1</p>
+      <p>Fotos bleiben auf dem Gerät.</p>
+    </div>
+
+    <p class="quellen">Alle Quellen stehen oben unter „Quellen“.</p>
+  </section>
+</main>
+
+<nav class="tabbar-huelle" aria-label="Bereiche">
+  <div class="tabbar glas" role="tablist" id="tabbar">
+    <button type="button" role="tab" id="tab-wetter" data-reiter="wetter" data-ikon="cloudsun" aria-selected="true" aria-controls="reiter-wetter" tabindex="0"><span class="tab-name">Wetter</span></button>
+    <button type="button" role="tab" id="tab-graphs" data-reiter="graphs" data-ikon="chart" aria-selected="false" aria-controls="reiter-graphs" tabindex="-1"><span class="tab-name">Graphs</span></button>
+    <button type="button" role="tab" id="tab-karten" data-reiter="karten" data-ikon="map" aria-selected="false" aria-controls="reiter-karte" tabindex="-1"><span class="tab-name">Karten</span></button>
+    <button type="button" role="tab" id="tab-radsat" data-reiter="radsat" data-ikon="radar" aria-selected="false" aria-controls="reiter-karte" tabindex="-1"><span class="tab-name">Rad/Sat</span></button>
+    <button type="button" role="tab" id="tab-mehr" data-reiter="mehr" data-ikon="more" aria-selected="false" aria-controls="reiter-mehr" tabindex="-1"><span class="tab-name">Mehr</span></button>
+  </div>
+</nav>
+
+<p class="offline-pille glas" id="offline-pille" role="status" hidden>Offline: Karte und Radar brauchen eine Verbindung.</p>
+
+<!-- Orte-Blatt -->
+<div class="blatt" id="orte-blatt" role="dialog" aria-modal="true" aria-labelledby="orte-titel" hidden>
+  <div class="blatt-kopf">
+    <h2 class="blatt-titel" id="orte-titel" tabindex="-1">Orte</h2>
+    <button type="button" class="blatt-fertig" id="orte-fertig">Fertig</button>
+  </div>
+  <div class="blatt-inhalt">
+    <div class="suchfeld">
+      <label for="orte-suche" class="nur-sr">Ort suchen</label>
+      <input type="search" id="orte-suche" placeholder="Ort suchen" autocomplete="off" autocapitalize="words" enterkeyhint="search">
+    </div>
+    <p class="hinweis-zeile" id="orte-meldung" role="status" aria-live="polite"></p>
+    <div class="liste" id="orte-ergebnisse" hidden></div>
+    <button type="button" class="knopf-leise" id="orte-standort"><span data-ikon="pin" class="zeile-ikon"></span><span>Mein Standort</span></button>
+    <div class="standort-frage" id="standort-frage" hidden>
+      <p>Wetterlage fragt dein Gerät einmal nach deinem Standort, um das Wetter dort zu zeigen. Der Standort bleibt auf deinem Gerät.</p>
+      <button type="button" class="knopf-akzent" id="standort-ja">Standort verwenden</button>
+    </div>
+    <h3 class="gruppe-titel">Deine Orte</h3>
+    <div class="liste" id="orte-liste"></div>
+  </div>
+</div>
+
+<!-- Kamera-Studio-Blatt -->
+<div class="blatt blatt-studio" id="studio-blatt" role="dialog" aria-modal="true" aria-labelledby="studio-titel" hidden>
+  <div class="blatt-kopf">
+    <h2 class="blatt-titel" id="studio-titel" tabindex="-1">Wetterfoto</h2>
+    <button type="button" class="blatt-fertig" id="studio-fertig">Fertig</button>
+  </div>
+  <div id="studio-wurzel"></div>
+</div>
+
+<script src="symbole.js"></script>
+<script src="ikonen.js"></script>
+<script src="lib/leaflet.min.js"></script>
+<script src="meteogramm.js"></script>
+<script src="lib/wpkarte.js"></script>
+<script src="bausteine-einbau.js"></script>
+<script src="gemeinsam.js"></script>
+<script src="version.js"></script>
+<script src="module.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
