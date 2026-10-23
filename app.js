@@ -21,7 +21,7 @@
 
   var z = {
     ort: null, orte: [], favoriten: [], standort: null, einheiten: WL.einheitenLesen(),
-    reiter: 'wetter', vorher: null, aktuell: null, ladeNr: 0, startMgAusstehend: false, abbauend: false,
+    reiter: 'wetter', vorher: null, letzterFester: 'wetter', aktuell: null, ladeNr: 0, startMgAusstehend: false, abbauend: false,
     geoNr: 0, geoTimer: null, blattOeffner: null
   };
 
@@ -120,16 +120,31 @@
     return (d.offline ? 'Offline · ' : '') + 'Stand ' + WL.ortsZeit(off, d.stand).zeit;
   }
 
+  // Die Kopfleiste ist fest; der Inhalt rückt um ihre echte Höhe ein (bei großer Schrift wird sie höher als --kopf-hoehe)
+  function kopfHoeheMessen() {
+    var kopf = $('kopf');
+    function setze() { document.documentElement.style.setProperty('--kopf-ist', kopf.offsetHeight + 'px'); }
+    setze();
+    if (window.ResizeObserver) new ResizeObserver(setze).observe(kopf, { box: 'border-box' });   // Safe-Area ist Innenabstand: nur die Rahmenbox ändert sich
+    else window.addEventListener('resize', setze);
+  }
+
   // ---------- Reiter ----------
   // Ohne Netz zeigt der Kartenbaustein nur eine leere Fläche: Hinweis darüber
+  // Graphs ohne Netz: derselbe ruhige Hinweis statt der Fehlermeldung des Bausteins (body.graphs-offline blendet sie aus)
   function offlineHinweis() {
-    var aus = (z.reiter === 'karten' || z.reiter === 'radsat') && (navigator.onLine === false || !!(z.aktuell && z.aktuell.offline));
-    $('offline-pille').hidden = !aus;
+    var offline = navigator.onLine === false || !!(z.aktuell && z.aktuell.offline);
+    var karte = z.reiter === 'karten' || z.reiter === 'radsat', graphs = z.reiter === 'graphs';
+    var pille = $('offline-pille');
+    pille.textContent = graphs ? 'Offline · Diagramm braucht Netz' : 'Offline: Karte und Radar brauchen eine Verbindung.';
+    pille.hidden = !((karte || graphs) && offline);
+    document.body.classList.toggle('graphs-offline', graphs && offline);
   }
   function zeigeReiter(id) {
     if (!REITER[id]) id = 'wetter';
     if (id !== z.reiter) z.vorher = z.reiter;
     z.reiter = id;
+    if (BAUSTEIN_REITER.indexOf(id) < 0) z.letzterFester = id;
     var panel = REITER[id].panel;
     ['reiter-wetter', 'reiter-graphs', 'reiter-karte', 'reiter-mehr'].forEach(function (p) { $(p).hidden = p !== panel; });
     REITER_REIHE.forEach(function (r) {
@@ -429,7 +444,7 @@
       if (!studio.offen) return;
       wurzel.innerHTML = '';
       studio.inst = KSStudio.mount(wurzel, {
-        variante: 'buehne', funktionen: res[1], wetter: studioWetter(), beispielFoto: 'lib/beispiel-foto.jpg', theme: 'auto', speicher: 'wetterlage',
+        variante: 'buehne', appName: 'Wetterlage', funktionen: res[1], wetter: studioWetter(), beispielFoto: 'lib/beispiel-foto.jpg', theme: 'auto', speicher: 'wetterlage',
         start: {
           format: 'original', overlay: { stil: 'glas', position: 'oben', farbe: 'auto' }, rahmen: 'keiner',
           daten: { temperatur: true, symbol: true, lage: false, datum: true, uhrzeit: false, wind: true, boeen: false, regen: true, regenRisiko: false, sonne: true, uv: false, feuchte: false, druck: false, ort: 'stadt', logo: true },
@@ -484,6 +499,9 @@
     window.addEventListener('resize', schriftMessen);
     document.addEventListener('visibilitychange', schriftMessen);
     orteLaden();
+    // Dauer-Vollbild ab Werk aus (der Baustein hätte es an): nur beim ersten Start setzen, danach gilt die Wahl unter „Mehr“
+    try { if (window.Bausteine && localStorage.getItem('wetterlage-vollbild-immer') === null) Bausteine.immerVollbildSetzen(false); } catch (e) { }
+    kopfHoeheMessen();
     kopfOrt(); orteZeichnen(); mehrZeichnen();
 
     // Tabs
@@ -527,8 +545,11 @@
     if (window.Bausteine) {
       Bausteine.beiVollbildZu = function () {
         if (z.abbauend) return;
+        // Zurück zum vorherigen Reiter. Ist der selbst ein Baustein-Reiter und „immer im Vollbild“ an, würde er sich wieder als Blatt öffnen
+        // und „Fertig“ führte zurück (Ping-Pong): dann gilt der letzte Reiter ohne Baustein (Wetter oder Mehr)
         var ziel = z.vorher || 'wetter';
-        if (BAUSTEIN_REITER.indexOf(ziel) >= 0 && Bausteine.immerVollbild()) ziel = 'wetter';
+        var immer = false; try { immer = Bausteine.immerVollbild(); } catch (e) { }
+        if (BAUSTEIN_REITER.indexOf(ziel) >= 0 && immer) ziel = z.letzterFester || 'wetter';
         zeigeReiter(ziel);
       };
     }

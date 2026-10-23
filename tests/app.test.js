@@ -49,8 +49,9 @@ async function mockKontext(browser, opt) {
   await ctx.clock.setFixedTime(JETZT);
   return { ctx, st };
 }
-async function mockSeite(browser, opt) {
+async function mockSeite(browser, opt, init) {
   const { ctx, st } = await mockKontext(browser, opt);
+  if (init) await ctx.addInitScript(init);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => st.fehler.push(e.message));
   await page.goto('http://localhost:' + PORT + '/', { waitUntil: 'load' });
@@ -58,6 +59,9 @@ async function mockSeite(browser, opt) {
   return { ctx, page, st };
 }
 
+const VB_AN = () => { try { localStorage.setItem('wetterlage-vollbild-immer', 'true'); } catch (e) { } };
+const VB_AUS = () => { try { localStorage.setItem('wetterlage-vollbild-immer', 'false'); } catch (e) { } };
+const SAFE = ':root{--safe-top:47px;--safe-bottom:34px}';
 const ergebnisse = [];
 async function pruefe(name, fn) {
   try { await fn(); ergebnisse.push([name, true]); console.log('ok     ' + name); }
@@ -221,11 +225,14 @@ function wahr(b, was) { if (!b) throw new Error(was); }
     const inhalt = () => page.evaluate(() => document.querySelector('.reiter:not([hidden])').innerText.trim().length);
     const zu = async () => { const f = page.locator('.mg-vb-fertig:visible, .wk-vb-fertig:visible').first(); if (await f.count()) { await f.click(); await page.waitForTimeout(900); } };
     await page.click('#tab-graphs'); await page.waitForTimeout(1500);
-    wahr((await inhalt()) > 20, 'Graphs leer'); wahr(/nicht erreichbar|Verbindung/.test(await page.textContent('#graphs')), 'Graphs ohne Hinweis');
+    wahr((await inhalt()) > 20, 'Graphs leer');
+    wahr(await page.isVisible('#offline-pille') && /Offline · Diagramm braucht Netz/.test(await page.textContent('#offline-pille')), 'Graphs: Offline-Hinweis fehlt');
+    wahr(!/nicht erreichbar/.test(await page.evaluate(() => document.getElementById('graphs').innerText)), 'Graphs zeigt „nicht erreichbar“');
+    wahr(await page.evaluate(() => document.getElementById('offline-pille').getBoundingClientRect().top >= document.getElementById('kopf').getBoundingClientRect().bottom - 0.5), 'Offline-Pille liegt unter der Kopfleiste nicht');
     for (const id of ['karten', 'radsat']) {
       await zu(); await page.click('#tab-' + id); await page.waitForTimeout(1200);
       wahr(await page.isVisible('#offline-pille'), id + ': kein Offline-Hinweis über der Karte');
-      wahr(/Offline/.test(await page.textContent('#offline-pille')), id + ': Hinweistext');
+      wahr(/Offline.*Karte und Radar brauchen/.test(await page.textContent('#offline-pille')), id + ': Hinweistext');
     }
     await zu(); await page.click('#tab-mehr');
     wahr(await page.isVisible('#reiter-mehr h1') && (await inhalt()) > 100, 'Mehr leer');
@@ -236,7 +243,7 @@ function wahr(b, was) { if (!b) throw new Error(was); }
   // Vollbild: bei 390 × 844 und 1280 × 800
   for (const [b, h, opt] of [[390, 844, {}], [1280, 800, { isMobile: false, hasTouch: false, deviceScaleFactor: 1 }]]) {
     await pruefe('14 Vollbild (immer an) bei ' + b + ' × ' + h + ': Blatt füllt den Bildschirm, „Fertig“ oben rechts; Fertig, Esc und Zurück schließen und führen zum vorherigen Reiter', async () => {
-      const { ctx, page, st } = await mockSeite(browser, Object.assign({ viewport: { width: b, height: h } }, opt));
+      const { ctx, page, st } = await mockSeite(browser, Object.assign({ viewport: { width: b, height: h } }, opt), VB_AN);
       for (const [id, blatt, fertig] of [['graphs', '#graphs.mg-vollbild', '.mg-vb-fertig'], ['karten', '#karte.wk-vollbild', '.wk-vb-fertig'], ['radsat', '#karte.wk-vollbild', '.wk-vb-fertig']]) {
         const oeffnen = async () => { await page.click('#tab-' + id); await page.waitForSelector(blatt, { timeout: 8000 }); await page.waitForTimeout(500); };
         const geschlossen = async (wie) => {
@@ -253,16 +260,20 @@ function wahr(b, was) { if (!b) throw new Error(was); }
         await oeffnen(); await page.keyboard.press('Escape'); await geschlossen('Esc');
         await oeffnen(); await page.goBack(); await geschlossen('Zurück');
       }
+      // „Fertig“ führt zum vorherigen Reiter, hier Mehr (nicht zur Startseite)
+      await page.click('#tab-mehr');
+      await page.click('#tab-graphs'); await page.waitForSelector('#graphs.mg-vollbild', { timeout: 8000 }); await page.waitForTimeout(500);
+      await page.click('#graphs.mg-vollbild .mg-vb-fertig'); await page.waitForSelector('#graphs.mg-vollbild', { state: 'detached', timeout: 5000 });
+      gleich(await page.getAttribute('#tab-mehr', 'aria-selected'), 'true', 'Fertig von Graphs (von Mehr gekommen) führt nicht zu Mehr');
       gleich(st.fehler, [], 'pageerror');
       await ctx.close();
     });
   }
 
   await pruefe('15 Schalter „immer im Vollbild“ aus: Reiter zeigen Diagramm/Karte eingebettet mit ⤢-Taste; Taste öffnet das Blatt, „Fertig“ schließt und bleibt im Reiter', async () => {
-    const { ctx, page, st } = await mockSeite(browser);
+    const { ctx, page, st } = await mockSeite(browser);   // ohne gesetzten Schlüssel: ab Werk aus
     await page.click('#tab-mehr');
-    await page.click('#schalter-vollbild');
-    gleich(await page.getAttribute('#schalter-vollbild', 'aria-checked'), 'false', 'Schalter');
+    gleich(await page.getAttribute('#schalter-vollbild', 'aria-checked'), 'false', 'Schalter ab Werk');
     for (const [id, blatt, taste, fertig] of [['graphs', '#graphs.mg-vollbild', '#graphs .mg-btn-voll', '.mg-vb-fertig'], ['karten', '#karte.wk-vollbild', '#karte .wk-voll', '.wk-vb-fertig'], ['radsat', '#karte.wk-vollbild', '#karte .wk-voll', '.wk-vb-fertig']]) {
       await page.click('#tab-' + id); await page.waitForSelector(taste, { state: 'visible', timeout: 8000 }); await page.waitForTimeout(500);
       gleich(await page.locator(blatt).count(), 0, id + ': öffnet trotz ausgeschaltetem Schalter als Blatt');
@@ -275,8 +286,93 @@ function wahr(b, was) { if (!b) throw new Error(was); }
     await ctx.close();
   });
 
+  await pruefe('15b Dauer-Vollbild ab Werk aus: Tab Graphs → Tab Rad/Sat und Graphs → Karten per Fingertipp auf die Tab-Leiste, ohne „Fertig“', async () => {
+    const { ctx, page, st } = await mockSeite(browser, { colorScheme: 'light' });
+    await page.addStyleTag({ content: SAFE });
+    gleich(await page.evaluate(() => localStorage.getItem('wetterlage-vollbild-immer')), 'false', 'Schlüssel nach dem Start');
+    for (const [von, nach] of [['graphs', 'radsat'], ['graphs', 'karten']]) {
+      await page.tap('#tab-' + von); await page.waitForSelector('#graphs .mg-knoepfe', { timeout: 8000 }); await page.waitForTimeout(400);
+      gleich(await page.locator('.mg-vollbild, .wk-vollbild').count(), 0, von + ': öffnet als Blatt');
+      await page.tap('#tab-' + nach); await page.waitForTimeout(600);
+      gleich(await page.getAttribute('#tab-' + nach, 'aria-selected'), 'true', nach + ' nicht aktiv nach Tippen auf die Tab-Leiste');
+      wahr(await page.isVisible('#reiter-karte'), nach + ': Kartenreiter nicht sichtbar');
+      gleich(await page.locator('.mg-vollbild, .wk-vollbild').count(), 0, nach + ': öffnet als Blatt');
+    }
+    gleich(st.fehler, [], 'pageerror');
+    await ctx.close();
+  });
+
+  await pruefe('15c Graphs normal (Schalter aus), Safe Areas 47/34: Knöpfe der Knopfleiste nicht von der Tab-Leiste verdeckt, Datumsfahne unter der Kopfleiste; ⤢ öffnet das Blatt, „Fertig“ bleibt in Graphs', async () => {
+    const { ctx, page, st } = await mockSeite(browser, { colorScheme: 'light' }, VB_AUS);
+    await page.addStyleTag({ content: SAFE });
+    await page.click('#tab-graphs'); await page.waitForSelector('#graphs path.mg-linie', { state: 'attached', timeout: 10000 }); await page.waitForTimeout(800);
+    const probleme = [];
+    for (const y of [150, 400, 700]) {
+      await page.evaluate((v) => window.scrollTo(0, v), y); await page.waitForTimeout(300);
+      const r = await page.evaluate(() => {
+        const aus = { verdeckt: [], knoepfe: 0, readoutTop: null, kopfUnten: document.getElementById('kopf').getBoundingClientRect().bottom };
+        document.querySelectorAll('#graphs .mg-knoepfe button').forEach((b) => {
+          const q = b.getBoundingClientRect(); if (q.width < 1 || q.height < 1 || getComputedStyle(b).visibility === 'hidden') return;
+          aus.knoepfe++;
+          // Mittelpunkt und oberer Rand (+ 6 px): die Tab-Leiste kann nur die untere Hälfte überdecken
+          [q.top + q.height / 2, q.top + 6].forEach((py) => {
+            const t = document.elementFromPoint(q.left + q.width / 2, py);
+            if (!(t === b || b.contains(t))) aus.verdeckt.push((b.getAttribute('class') || b.tagName) + ' → ' + (t && (t.id || t.getAttribute('class') || t.tagName)));
+          });
+        });
+        const ro = document.querySelector('#graphs .mg-readout'); if (ro) aus.readoutTop = ro.getBoundingClientRect().top;
+        return aus;
+      });
+      if (r.knoepfe < 3) probleme.push('scrollY ' + y + ': zu wenige Knöpfe sichtbar (' + r.knoepfe + ')');
+      if (r.verdeckt.length) probleme.push('scrollY ' + y + ': verdeckte Knöpfe ' + JSON.stringify(r.verdeckt));
+      if (!(r.readoutTop !== null && r.readoutTop >= r.kopfUnten - 0.5)) probleme.push('scrollY ' + y + ': Datumsfahne (top ' + r.readoutTop + ') nicht unter der Kopfleiste (' + r.kopfUnten + ')');
+    }
+    gleich(probleme, [], 'Verdeckungsprüfung');
+    await page.evaluate(() => window.scrollTo(0, 400)); await page.waitForTimeout(300);
+    await page.click('#graphs .mg-btn-voll');
+    await page.waitForSelector('#graphs.mg-vollbild', { timeout: 5000 }); await page.waitForTimeout(500);
+    const unten = await page.evaluate(() => document.querySelector('#graphs.mg-vollbild .mg-knoepfe').getBoundingClientRect().bottom);
+    wahr(unten > 844 - 34 - 20, 'Vollbild: Knopfleiste schwebt zu hoch (Unterkante ' + unten + ')');
+    await page.click('#graphs.mg-vollbild .mg-vb-fertig'); await page.waitForSelector('#graphs.mg-vollbild', { state: 'detached', timeout: 5000 });
+    gleich(await page.getAttribute('#tab-graphs', 'aria-selected'), 'true', 'Reiter nach „Fertig“');
+    gleich(st.fehler, [], 'pageerror');
+    await ctx.close();
+  });
+
+  await pruefe('15d Kopfleiste: fest (position fixed), bleibt beim Scrollen oben, overscroll none, Streifen in Höhe der Safe-Area deckend, Leisten ~85 % deckend, erster Inhalt unter der Kopfleiste bei 100/130/150 %', async () => {
+    const { ctx, page, st } = await mockSeite(browser, { colorScheme: 'light' });
+    await page.addStyleTag({ content: SAFE });
+    const alpha = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c) || /color\(srgb ([^)]+)\)/.exec(c); const p = m[1].split(/[ ,/]+/).filter(Boolean); return p.length > 3 ? +p[3] : 1; };
+    const k = await page.evaluate(() => {
+      const kopf = document.getElementById('kopf'), c = getComputedStyle(kopf), b = getComputedStyle(kopf, '::before'), t = getComputedStyle(document.querySelector('.tabbar-huelle .tabbar'));
+      return { pos: c.position, oh: getComputedStyle(document.documentElement).overscrollBehaviorY, ob: getComputedStyle(document.body).overscrollBehaviorY, bg: c.backgroundColor, tbg: t.backgroundColor,
+        streifenH: b.height, streifenBg: b.backgroundColor, streifenPos: b.position, bf: c.backdropFilter || c.webkitBackdropFilter };
+    });
+    gleich(k.pos, 'fixed', 'Kopfleiste position');
+    gleich([k.oh, k.ob], ['none', 'none'], 'overscroll-behavior html/body');
+    gleich(k.streifenH, '47px', 'Streifen über der Kopfleiste (Höhe = Safe-Area oben)');
+    gleich(alpha(k.streifenBg), 1, 'Streifen deckend');
+    wahr(alpha(k.bg) >= 0.8 && alpha(k.bg) <= 0.9, 'Deckkraft Kopfleiste ' + alpha(k.bg) + ' (' + k.bg + ')');
+    wahr(alpha(k.tbg) >= 0.8 && alpha(k.tbg) <= 0.9, 'Deckkraft Tab-Leiste ' + alpha(k.tbg) + ' (' + k.tbg + ')');
+    wahr(/blur/.test(k.bf), 'Glas-Unschärfe der Kopfleiste fehlt: ' + k.bf);
+    await page.evaluate(() => window.scrollTo(0, 600)); await page.waitForTimeout(300);
+    gleich(await page.evaluate(() => window.scrollY > 100 && document.getElementById('kopf').getBoundingClientRect().top), 0, 'Kopfleiste nach Scrollen bei top');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    for (const prozent of [100, 130, 150]) {
+      await page.evaluate((p) => { document.documentElement.style.fontSize = (17 * p / 100) + 'px'; window.dispatchEvent(new Event('resize')); }, prozent);
+      await page.waitForTimeout(600);
+      for (const [tab, erst] of [['wetter', '#module > *'], ['mehr', '#reiter-mehr .mehr-titel']]) {
+        await page.click('#tab-' + tab); await page.waitForTimeout(500);
+        const m = await page.evaluate((q) => { const e = document.querySelector(q).getBoundingClientRect(); return [document.getElementById('kopf').getBoundingClientRect().bottom, e.top]; }, erst);
+        wahr(m[1] >= m[0] - 0.5, prozent + ' % ' + tab + ': erster Inhalt (top ' + m[1] + ') beginnt unter der Kopfleiste (Unterkante ' + m[0] + ')');
+      }
+    }
+    gleich(st.fehler, [], 'pageerror');
+    await ctx.close();
+  });
+
   await pruefe('16 Karte: nur die gewählten Ebenen sichtbar (Druck aus), Radar fordert keine Kacheln über Zoomstufe 7 an', async () => {
-    const { ctx, page, st } = await mockSeite(browser);
+    const { ctx, page, st } = await mockSeite(browser, {}, VB_AN);
     const sichtbar = () => page.$$eval('#karte [data-ebene]', (bs) => bs.filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.getAttribute('data-ebene')).sort());
     await page.click('#tab-karten'); await page.waitForSelector('#karte [data-ebene]', { timeout: 8000 });
     gleich(await sichtbar(), ['regen', 'temp', 'wetter', 'wind', 'wolken'], 'Ebenen in Karten');
@@ -344,8 +440,9 @@ function wahr(b, was) { if (!b) throw new Error(was); }
     const page = await ctx.newPage();
     page.on('pageerror', (e) => st.fehler.push(e.message));
     await page.addInitScript(() => {
+      try { localStorage.setItem('wetterlage-einheiten', '{"wind":"mph"}'); } catch (e) { }
       let ks; window.__ksFunktionen = null;
-      Object.defineProperty(window, 'KSStudio', { configurable: true, get: () => ks, set: (v) => { ks = v; if (v && v.mount) { const m = v.mount; v.mount = function (w, o) { window.__ksFunktionen = o.funktionen; return m.call(this, w, o); }; } } });
+      Object.defineProperty(window, 'KSStudio', { configurable: true, get: () => ks, set: (v) => { ks = v; if (v && v.mount) { const m = v.mount; v.mount = function (w, o) { window.__ksFunktionen = o.funktionen; window.__ksOpt = { appName: o.appName, wind: o.wetter && o.wetter.wind }; return m.call(this, w, o); }; } } });
     });
     await page.goto('http://localhost:' + PORT + '/', { waitUntil: 'load' });
     await page.waitForFunction(() => /Stand \d\d:\d\d/.test(document.getElementById('kopf-stand').textContent), null, { timeout: 15000 });
@@ -353,6 +450,10 @@ function wahr(b, was) { if (!b) throw new Error(was); }
     await page.waitForFunction(() => window.__ksFunktionen, null, { timeout: 15000 });
     const f = await page.evaluate(() => window.__ksFunktionen);
     gleich(f.wetterZeitpunkt, false, 'wetterZeitpunkt');
+    const o = await page.evaluate(() => window.__ksOpt);
+    gleich(o.appName, 'Wetterlage', 'appName (Logo-Schriftzug)');
+    // Das Studio schreibt „km/h“ fest und hat keine Einheiten-Option: der Wind bleibt trotz mph-Wahl in km/h (Fixture 9,9 km/h), sonst stünde mph-Zahl mit „km/h“ im Bild
+    gleich(o.wind, 10, 'Windwert für das Studio (km/h)');
     wahr(f.kamera === true && f.mediathek === true, 'übrige Funktionen aus kamera-studio.json fehlen');
     await page.waitForTimeout(500);
     await page.keyboard.press('Escape'); await page.waitForTimeout(300);

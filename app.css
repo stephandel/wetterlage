@@ -15,6 +15,14 @@
   --schalter-knauf: 27px;
   --tabbar-unten: max(var(--s2), var(--safe-bottom));
   --tabbar-breite: 480px;
+  /* Kopf- und Tab-Leiste ~85 % deckend. Bewusste Abweichung von Regel 22 (61 %) auf Wunsch von Stephan (Nr. 6/31):
+     --bg-2 zu 85 % gegen transparent ergibt Alpha 0,85 (die Glas-Unschärfe bleibt) */
+  --leiste-bg: color-mix(in srgb, var(--bg-2) 85%, transparent);
+  /* tatsächliche Höhe der festen Kopfleiste samt Safe-Area oben; app.js (kopfHoeheMessen) überschreibt sie mit dem Messwert, z. B. bei großer Schrift */
+  --kopf-ist: calc(var(--kopf-hoehe) + var(--safe-top));
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --leiste-bg: var(--bg-2); }   /* ohne Transparenz ganz deckend */
 }
 @media (prefers-contrast: more) {
   :root {
@@ -27,15 +35,17 @@
 
 /* Grundlage */
 /* iOS: Schriftgröße aus den Einstellungen setzt app.js (schriftMessen) als Wurzelgröße */
-html { background: var(--bg); -webkit-text-size-adjust: 100%; }
+html { background: var(--bg); -webkit-text-size-adjust: 100%; overscroll-behavior: none; }
 body {
   background: transparent;
   min-height: 100dvh;
   line-height: var(--lh);
+  overscroll-behavior: none;
 }
+/* Seitenverlauf erst unterhalb der Kopfleiste; darüber ruhige Fläche in --bg-2 */
 body::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background: linear-gradient(180deg, var(--akzent-tint) 0%, var(--bg) 55%);
+  background: linear-gradient(180deg, var(--bg-2) var(--kopf-ist), var(--akzent-tint) var(--kopf-ist), var(--bg) 55%);
 }
 .nur-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 button { -webkit-tap-highlight-color: transparent; }
@@ -44,11 +54,17 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible, a:focus-vis
 
 /* Kopfzeile */
 .kopf {
-  position: sticky; top: 0; z-index: 20;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+  background: var(--leiste-bg);
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--s1);
   padding: var(--safe-top) var(--seite-rechts) 0 var(--seite-links);
   min-height: calc(var(--kopf-hoehe) + var(--safe-top));
   border-width: 0 0 1px 0; border-radius: 0;
+}
+/* deckender Streifen in Höhe der Safe-Area oben (Statusleiste): kein Inhalt scheint dort durch */
+.kopf::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: var(--safe-top); z-index: -1; pointer-events: none;
+  background: var(--bg-2);
 }
 .kopf-knopf {
   inline-size: var(--tap); block-size: var(--tap); min-inline-size: var(--tap);
@@ -64,8 +80,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible, a:focus-vis
 
 /* Inhalt und Reiter */
 .inhalt {
-  padding: var(--s3) var(--seite-rechts) calc(var(--leiste-hoehe) + var(--tabbar-unten) + var(--s6)) var(--seite-links);
-  min-height: calc(100dvh - var(--kopf-hoehe) - var(--safe-top));
+  padding: calc(var(--kopf-ist) + var(--s3)) var(--seite-rechts) calc(var(--leiste-hoehe) + var(--tabbar-unten) + var(--s6)) var(--seite-links);
+  min-height: 100dvh;
 }
 .reiter { min-inline-size: 0; }
 .reiter:not(#reiter-graphs):not(#reiter-karte):not([hidden]) { animation: einblenden 160ms var(--ease); }
@@ -88,6 +104,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible, a:focus-vis
   inline-size: min(100%, var(--tabbar-breite)); min-block-size: var(--leiste-hoehe);
   display: flex; align-items: stretch; gap: 0;
   padding: var(--s1); justify-content: stretch;
+  background: var(--leiste-bg);
   border-radius: var(--r-chip);
 }
 .tabbar-huelle .tabbar button {
@@ -235,11 +252,14 @@ body.blatt-offen { overflow: hidden; }
 .offline-pille {
   position: fixed; z-index: calc(var(--blatt-z) - 5); pointer-events: none;
   inset-inline: max(var(--s4), var(--safe-left)) max(var(--s4), var(--safe-right));
-  top: calc(var(--safe-top) + var(--kopf-hoehe) + var(--s3));
+  top: calc(var(--kopf-ist) + var(--s3));
   padding: var(--s2) var(--s4); border-radius: var(--r-kachel); text-align: center;
   font-size: var(--fs-footnote); color: var(--label);
 }
 .offline-pille[hidden] { display: none; }
+
+/* Offline in Graphs: die Meldung des Bausteins („nicht erreichbar“) ersetzt der ruhige Hinweis oben (app.js setzt body.graphs-offline) */
+body.graphs-offline #graphs .mg-zeit .mg-rel { display: none; }
 
 /* Bausteine (Dateien der Bausteine bleiben unverändert, Anpassungen nur hier) */
 #graphs .mg-btn, #graphs .mg-tab, #start-meteogramm .mg-btn { min-height: var(--tap); min-width: var(--tap); }
@@ -252,20 +272,22 @@ body.blatt-offen { overflow: hidden; }
 /* Start-Kachel: der Baustein hat margin: 0 auto, im Spaltenlayout der Kachel schrumpft er dadurch auf die Breite seines Inhalts (Millionen Pixel); Breite der Kachel erzwingen */
 #start-meteogramm { inline-size: 100%; min-inline-size: 0; max-inline-size: 100%; margin: 0; overflow: hidden; contain: inline-size; }
 #start-meteogramm .mg-top, #start-meteogramm .mg-readout, #start-meteogramm .mg-werte, #start-meteogramm .mg-knoepfe, #start-meteogramm .mg-ecke-halter, #start-meteogramm .mg-foot { display: none; }   /* Modellwahl, Werteliste, Knopfleiste, Zoom, Hinweis, Quelle (steht am Seitenende) */
-#karte.wk { --wk-hoehe: calc(100dvh - var(--kopf-hoehe) - var(--safe-top) - var(--leiste-hoehe) - var(--tabbar-unten) - var(--s8) - var(--s8)); }
+/* Graphs normal: Knopfleiste haftet über der Tab-Leiste, Datumsfahne unter der Kopfleiste (im Vollbild-Blatt setzt der Baustein eigene Werte mit !important) */
+#graphs { --mg-haft-unten: calc(var(--leiste-hoehe) + var(--tabbar-unten) + var(--s2)); --mg-haft-oben: var(--kopf-ist); }
+#karte.wk { --wk-hoehe: calc(100dvh - var(--kopf-ist) - var(--leiste-hoehe) - var(--tabbar-unten) - var(--s8) - var(--s8)); }
 
 /* Querformat (iPhone liegend) */
 @media (orientation: landscape) and (max-height: 500px) {
   :root { --tabbar-breite: 480px; --leiste-hoehe: 44px; --tabbar-unten: max(var(--s1), var(--safe-bottom)); }
+  :root { --kopf-ist: calc(40px + var(--safe-top)); }
   .kopf { min-height: calc(40px + var(--safe-top)); padding-inline: var(--seite-links) var(--seite-rechts); }
   .kopf-knopf { margin-block: -2px; }   /* Tippfläche bleibt 44 px, die Leiste 40 px */
   .kopf-mitte { padding-block: 0; line-height: 1.1; }
   .kopf-ort { font-size: var(--fs-body); }
   .tabbar-huelle .tabbar button { flex-direction: row; gap: var(--s2); }
   .tabbar-huelle .tabbar { padding: 0 var(--s1); }
-  .inhalt { min-height: calc(100dvh - 40px - var(--safe-top)); }
   .blatt-kopf { min-block-size: 40px; }
-  #karte.wk { --wk-hoehe: calc(100dvh - 40px - var(--safe-top) - var(--leiste-hoehe) - var(--tabbar-unten) - var(--s8)); min-height: 200px; }
+  #karte.wk { --wk-hoehe: calc(100dvh - var(--kopf-ist) - var(--leiste-hoehe) - var(--tabbar-unten) - var(--s8)); min-height: 200px; }
 }
 
 /* Große Schrift (data-schrift setzt app.js nach der gemessenen Schriftgröße) */
