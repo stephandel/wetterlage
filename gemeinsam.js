@@ -1,5 +1,5 @@
 /* gemeinsam.js – Hilfen, die app.js und module.js gemeinsam nutzen (Wetterlage, 23.10.2026).
-   Ortszeiten werden aus den ISO-Strings der Open-Meteo-Antwort und utc_offset_seconds gerechnet, nie über Date-Zeitzonen.
+   Ortszeiten werden aus den ISO-Strings der Open-Meteo-Antwort und einem UTC-Abstand gerechnet (nie über Date-Zeitzonen); den Abstand liefert WL.ortsOffset aus der IANA-Zeitzone der Antwort (Zeitumstellung), ersatzweise utc_offset_seconds.
    Einbinden nach ikonen.js, vor module.js und app.js. Alles unter window.WL. */
 (function (global) {
   'use strict';
@@ -13,6 +13,32 @@
     var datum = d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate());
     var zeit = p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes());
     return { datum: datum, zeit: zeit, iso: datum + 'T' + zeit, stunde: d.getUTCHours(), minute: d.getUTCMinutes(), wochentag: d.getUTCDay(), ms: d.getTime() - (offsetSek || 0) * 1000 };
+  };
+  // UTC-Abstand (Sekunden) einer IANA-Zeitzone zu einem Zeitpunkt (Sommer-/Winterzeit inklusive); ohne gültige Zeitzone gilt ersatz
+  var offsetFormat = {};
+  WL.offsetFuer = function (zone, ms, ersatz) {
+    try {
+      if (!zone || ms == null || isNaN(ms)) return ersatz || 0;
+      var f = offsetFormat[zone] || (offsetFormat[zone] = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }));
+      var t = {}; f.formatToParts(new Date(ms)).forEach(function (p) { t[p.type] = +p.value; });
+      var sek = Math.round((Date.UTC(t.year, t.month - 1, t.day, t.hour % 24, t.minute, t.second) - Math.floor(ms / 1000) * 1000) / 1000);
+      return isFinite(sek) ? sek : (ersatz || 0);
+    } catch (e) { return ersatz || 0; }
+  };
+  // Offset des Orts zum Zeitpunkt ms: aus der Zeitzone der Antwort, sonst utc_offset_seconds
+  WL.ortsOffset = function (forecast, ms) {
+    var f = forecast || {};
+    return WL.offsetFuer(f.timezone, ms == null ? Date.now() : ms, f.utc_offset_seconds || 0);
+  };
+  // Ortssuche: Deutschland zuerst, dann übriges Europa, dann der Rest; innerhalb der Gruppen bleibt die Reihenfolge der API
+  var EUROPA = ['AT', 'CH', 'FR', 'IT', 'ES', 'PT', 'NL', 'BE', 'LU', 'DK', 'SE', 'NO', 'FI', 'IS', 'IE', 'GB', 'PL', 'CZ', 'SK', 'HU', 'SI', 'HR', 'RO', 'BG', 'GR', 'EE', 'LV', 'LT', 'MT', 'CY', 'LI', 'MC', 'AD', 'SM', 'VA', 'AL', 'BA', 'ME', 'MK', 'RS', 'XK', 'UA', 'MD', 'BY'];
+  WL.trefferSortieren = function (liste, max) {
+    var gruppen = [[], [], []];
+    (Array.isArray(liste) ? liste : []).forEach(function (r) {
+      var cc = String(r && r.country_code || '').toUpperCase();
+      gruppen[cc === 'DE' ? 0 : EUROPA.indexOf(cc) >= 0 ? 1 : 2].push(r);
+    });
+    return gruppen[0].concat(gruppen[1], gruppen[2]).slice(0, max || 8);
   };
   // Lokaler ISO-String der API ('2026-10-23T14:00' oder '2026-10-23') → ms seit Epoche
   WL.isoZuMs = function (iso, offsetSek) {

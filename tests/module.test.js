@@ -275,6 +275,7 @@ test('Warnung: Einzeiler mit Stufe als Text, zugeklappt; Aktuell: Uhrzeit des St
   assert.ok(h.includes('Stufe 2 von 4 · Sturmböen'), 'Einzeiler-Text fehlt');
   assert.ok(/aria-label="Warnung ausblenden"/.test(h) && !h.includes('class="pille"'), 'x-Knopf fehlt oder alte Pille da');
   assert.ok(/<div class="aktuell-links"><p class="aktuell-label">Aktuell <span class="aktuell-zeit">14:00<\/span><\/p><div class="sym sym-aktuell">/.test(h), 'Aktuell mit Uhrzeit fehlt links');
+  assert.ok(/<h2 class="kachel-kopf sr-only" id="m-aktuell-t">Aktuell in Mannheim<\/h2>/.test(h), 'Aktuell: Überschrift nur für Screenreader fehlt');
   assert.ok(!/class="kopf"/.test(h), 'class="kopf" gehört der Kopfzeile der Hülle (Namensgleichheit)');
 });
 test('Reihenfolge der Module', () => {
@@ -437,6 +438,40 @@ test('Warnung: Rendern liest die Weg-Liste (WL.merk) und zeigt bei nur weggeklic
   c = containerStub(); Module.rendern(c, daten({ warnungen: [WARN] }), {});
   assert.ok(c.innerHTML.includes('k-warnung'), 'neue id zeigt die Kachel wieder');
   WL.merk('warnung-weg', null);
+});
+
+// ---------- Aktuell: Böen, Ortszeit, Ortssuche (Korrekturlauf 3, Paket C2) ----------
+console.log('Paket C2');
+test('Aktuell: Böen aus current.wind_gusts_10m, in der gewählten Einheit', () => {
+  let c = containerStub(); Module.rendern(c, volleDaten(), { oeffneReiter() { }, nochmal() { } });
+  let m = /<span class="boeen"><span>Böen<\/span><span><span class="zahl">25<\/span> <span class="einheit">km\/h<\/span><\/span><\/span>/.exec(c.innerHTML);
+  assert.ok(m, 'Böen 25 km/h fehlt');
+  const d = volleDaten(); d.einheiten = { temp: 'c', wind: 'ms' };
+  c = containerStub(); Module.rendern(c, d, { oeffneReiter() { }, nochmal() { } });
+  assert.ok(/class="boeen"><span>Böen<\/span><span><span class="zahl">7<\/span> <span class="einheit">m\/s/.test(c.innerHTML), 'Böen in m/s fehlt');
+});
+test('Ortszeit: Offset aus der Zeitzone zum jeweiligen Zeitpunkt (Zeitumstellung 25.10.2026)', () => {
+  const nach = Date.UTC(2026, 9, 25, 2, 30), vor = Date.UTC(2026, 9, 24, 12, 0);
+  assert.strictEqual(WL.offsetFuer('Europe/Berlin', nach, 7200), 3600, 'nach der Umstellung');
+  assert.strictEqual(WL.offsetFuer('Europe/Berlin', vor, 3600), 7200, 'vor der Umstellung');
+  assert.strictEqual(WL.offsetFuer('Atlantic/Canary', nach, 0), 0, 'Corralejo');
+  assert.strictEqual(WL.offsetFuer('Asia/Kolkata', nach, 0), 19800, 'halbe Stunden');
+  assert.strictEqual(WL.offsetFuer(undefined, nach, 7200), 7200, 'ohne Zeitzone: Ersatz');
+  assert.strictEqual(WL.offsetFuer('Gibt/Esnicht', nach, 3600), 3600, 'ungültige Zeitzone: Ersatz');
+});
+test('Ortszeit: Module rechnen „jetzt“ mit dem Offset der Zeitzone, nicht dem alten Abrufwert', () => {
+  const d = daten({ jetzt: Date.UTC(2026, 9, 25, 2, 30) }); d.forecast.timezone = 'Europe/Berlin'; d.forecast.utc_offset_seconds = 7200;
+  const c = containerStub(); Module.rendern(c, d, { oeffneReiter() { }, nochmal() { } });
+  assert.ok(c.innerHTML.includes('class="kachel k-stunden'), 'Rendern ok');
+  assert.strictEqual(Module.offsetVon(d), 3600, 'offsetVon');
+});
+test('Ortssuche: Treffer sortieren – DE zuerst, dann Europa, dann Rest, innen Reihenfolge behalten, höchstens 8', () => {
+  const t = (n, cc) => ({ name: n, country_code: cc });
+  const liste = [t('Hamburg', 'US'), t('Buhler', 'US'), t('Hamburg', 'DE'), t('Hambourg', 'FR'), t('Hamburgo', 'BR'), t('Hamburg2', 'DE'), t('Hamburg', 'GB'), t('Hamburg', 'AT'), t('H1', 'JP'), t('H2', 'JP'), t('H3', 'CA')];
+  const r = WL.trefferSortieren(liste, 8);
+  eq(r.map((x) => x.name + x.country_code), ['HamburgDE', 'Hamburg2DE', 'HambourgFR', 'HamburgGB', 'HamburgAT', 'HamburgUS', 'BuhlerUS', 'HamburgoBR']);
+  eq(WL.trefferSortieren(null, 8), []);
+  assert.strictEqual(WL.trefferSortieren(liste).length, 8);
 });
 
 console.log('\n' + ok + ' bestanden, ' + fail + ' fehlgeschlagen');

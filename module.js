@@ -15,8 +15,9 @@
   function esc(s) { return WL.esc(s); }
   function zahlDe(v, d) { if (v == null || isNaN(v)) return '–'; var f = Math.pow(10, d || 0); return String(Math.round(v * f) / f).replace('.', ','); }
   function num(v) { return v != null && !isNaN(v) ? +v : null; }
-  function offsetVon(daten) { return (daten && daten.forecast && daten.forecast.utc_offset_seconds) || 0; }
   function jetztMs(daten) { return daten && daten.jetztMs != null ? daten.jetztMs : Date.now(); }
+  // UTC-Abstand des Orts für „jetzt“: aus der Zeitzone (Zeitumstellung), ersatzweise der Wert des Abrufs
+  function offsetVon(daten) { return daten && daten.forecast ? WL.ortsOffset(daten.forecast, jetztMs(daten)) : 0; }
   // Index der laufenden Stunde (wie WL.jetztIndex, aber mit wählbarer Uhrzeit für Tests)
   function jetztIdx(zeiten, offset, ms) {
     var j = WL.ortsZeit(offset, ms).iso.slice(0, 13) + ':00';
@@ -252,7 +253,7 @@
   R.gezeiten = gezeiten;
 
   R.tipps = function (daten) {
-    var f = daten.forecast, h = f.hourly, d = f.daily, off = f.utc_offset_seconds || 0, ms = jetztMs(daten), einh = daten.einheiten;
+    var f = daten.forecast, h = f.hourly, d = f.daily, off = offsetVon(daten), ms = jetztMs(daten), einh = daten.einheiten;
     var jetzt = WL.ortsZeit(off, ms), heute = jetzt.datum, nowIso = jetzt.iso, out = [], i;
     var i0 = jetztIdx(h.time, off, ms), iEnde = i0;
     while (iEnde + 1 < h.time.length && h.time[iEnde + 1].slice(0, 10) === heute) iEnde++;
@@ -427,14 +428,14 @@
     var tag = c.is_day == null ? true : !!c.is_day, code = c.weather_code;
     var ansicht = WL.merk('aktuell-ansicht') === 'radar' ? 'radar' : 'werte';
     var heissAria = tempAria(c.temperature_2m, einh);
-    var wind = '<dt>Wind</dt><dd>' + windTeile(c.wind_speed_10m, einh) + ' <span class="richtung">' + esc(WL.windRichtung(c.wind_direction_10m)) + '</span>' + roseKlein(c.wind_direction_10m) + '</dd>';
+    var boeen = num(c.wind_gusts_10m) === null ? '' : '<span class="boeen"><span>Böen</span><span>' + windTeile(c.wind_gusts_10m, einh) + '</span></span>';
+    var wind = '<div class="wind-zeile">' + roseKlein(c.wind_direction_10m) + '<span class="wind-wert"><span class="sr-only">Wind </span>' + windTeile(c.wind_speed_10m, einh) + '<span class="sr-only"> aus ' + esc(WL.windRichtungWort(c.wind_direction_10m)) + '</span></span>' + boeen + '</div>';
     var werte = '<dl class="werte">' +
       '<div><dt>Gefühlt</dt><dd>' + zahlEinheit(WL.temp(c.apparent_temperature, einh)) + '</dd></div>' +
       '<div><dt>Taupunkt</dt><dd>' + zahlEinheit(WL.temp(h.dew_point_2m && h.dew_point_2m[ih], einh)) + '</dd></div>' +
       '<div><dt>Feuchte</dt><dd>' + zahlEinheit(c.relative_humidity_2m == null ? '–' : Math.round(c.relative_humidity_2m), '%') + '</dd></div>' +
       '<div><dt>Druck</dt><dd>' + zahlEinheit(c.pressure_msl == null ? '–' : Math.round(c.pressure_msl), 'hPa') + '</dd></div>' +
-      '<div>' + wind + '</div>' +
-      '<div><dt>Regen heute</dt><dd>' + zahlEinheit(zahlDe(d.precipitation_sum && d.precipitation_sum[di], 1), 'mm') + '</dd></div></dl>';
+      '<div><dt>Regen heute</dt><dd>' + zahlEinheit(zahlDe(d.precipitation_sum && d.precipitation_sum[di], 1), 'mm') + '</dd></div></dl>' + wind;
     var radarHtml;
     if (daten.offline) radarHtml = ruhig('Offline: Radar nicht verfügbar');
     else if (!daten.radar || !daten.radar.frames || !daten.radar.frames.length) radarHtml = ruhig('Radar gerade nicht erreichbar');
@@ -452,7 +453,8 @@
       '<span class="sr-only" aria-live="polite" data-ansicht-text>Ansicht: ' + (ansicht === 'radar' ? 'Radar-Karte' : 'Werte') + '</span></div>' +
       '<div class="aktuell-rechts"><div class="ansicht ansicht-werte' + (ansicht === 'werte' ? '' : ' aus') + '"><p class="wetter-text">' + esc(WL.wetterText(code, tag)) + '</p>' + werte + '</div>' +
       '<div class="ansicht ansicht-radar' + (ansicht === 'radar' ? '' : ' aus') + '">' + radarHtml + '</div></div></div>';
-    return kachel('k-aktuell k-gross', 'm-aktuell', 'Aktuell in ' + daten.ort.name, html);
+    // sichtbar steht nur „Aktuell hh:mm“ im Inhalt; die Überschrift bleibt für Screenreader (aria-labelledby)
+    return '<section class="kachel k-aktuell k-gross" aria-labelledby="m-aktuell-t"><h2 class="kachel-kopf sr-only" id="m-aktuell-t">' + esc('Aktuell in ' + daten.ort.name) + '</h2>' + html + '</section>';
   }
 
   function modStunden(daten) {
@@ -465,8 +467,8 @@
       return '<div class="std"><p class="std-zeit">' + (t.slice(0, 10) === heute ? '' : esc(WL.wochentag(t)) + ' ') + uhr(t) + '</p>' +
         '<div class="sym sym-stunden">' + sym(WL.symbolName(code, tag)) + '</div>' +
         '<p class="std-text">' + esc(WL.wetterText(code, tag)) + '</p>' +
-        '<p class="std-temp">' + esc(WL.temp(h.temperature_2m[i], einh)) + '</p>' +
-        '<p class="std-regen">' + ikon('tropfen', 'ikon-klein') + '<span class="sr-only">Regenwahrscheinlichkeit </span>' + zahlEinheit(pop === null ? '–' : Math.round(pop), '%') + '</p>' +
+        '<p class="std-zeile"><span class="std-regen">' + ikon('tropfen', 'ikon-klein') + '<span class="sr-only">Regenwahrscheinlichkeit </span>' + zahlEinheit(pop === null ? '–' : Math.round(pop), '%') + '</span>' +
+        '<span class="std-temp">' + esc(WL.temp(h.temperature_2m[i], einh)) + '</span></p>' +
         '<p class="std-wind"><span class="sr-only">Wind </span>' + windTeile(h.wind_speed_10m[i], einh) + ' <span class="richtung">' + esc(WL.windRichtung(h.wind_direction_10m[i])) + '</span></p></div>';
     }).join('');
     return kachel('k-stunden k-mittel', 'm-stunden', 'Stunden', '<div class="stunden">' + sp + '</div>');
@@ -646,6 +648,7 @@
   M.rechnen = { mond: R.mond, tipps: R.tipps, regenSatz: R.regenSatz, stundenIndizes: R.stundenIndizes, luftTage: R.luftTage, pollenMorgen: R.pollenMorgen, hauptphasen: R.hauptphasen, trockenBis: R.trockenBis, gezeiten: R.gezeiten, balkenHoehe: R.balkenHoehe,
     warnArt: R.warnArt, warnTitel: R.warnTitel, warnKurz: R.warnKurz, warnTipp: R.warnTipp, warnAuswahl: R.warnAuswahl, wegAufraeumen: R.wegAufraeumen, wegMerken: R.wegMerken, wegEntfernen: R.wegEntfernen };
   M.warnSymbol = warnSymbol;
+  M.offsetVon = offsetVon;
   M.WEG_SCHLUESSEL = WEG_SCHLUESSEL;
 
   function bind(container, daten, ctx) {

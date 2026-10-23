@@ -116,9 +116,12 @@
   // ---------- Kopfzeile ----------
   function kopfOrt() { $('kopf-ort').textContent = z.ort ? z.ort.name : 'Wetterlage'; }
   function kopfStand(text) { $('kopf-stand').textContent = text; }
+  // UTC-Abstand des Orts jetzt (Zeitzone der Antwort, damit die Zeitumstellung stimmt; ersatzweise der Wert des Abrufs)
+  function ortOffset(d, ms) { return d && d.forecast ? WL.ortsOffset(d.forecast, ms) : 0; }
+  // Liegt der Ort in einer anderen Zeitzone als das Gerät, heißt die Zeit „Ortszeit“
+  function andereZeit(d) { return ortOffset(d, d.stand) !== -new Date(d.stand).getTimezoneOffset() * 60; }
   function standText(d) {
-    var off = d.forecast && d.forecast.utc_offset_seconds || 0;
-    return (d.offline ? 'Offline · ' : '') + 'Stand ' + WL.ortsZeit(off, d.stand).zeit;
+    return (d.offline ? 'Offline · ' : '') + 'Stand ' + WL.ortsZeit(ortOffset(d, d.stand), d.stand).zeit + (andereZeit(d) ? ' Ortszeit' : '');
   }
 
   // Die Kopfleiste ist fest; der Inhalt rückt um ihre echte Höhe ein (bei großer Schrift wird sie höher als --kopf-hoehe)
@@ -140,7 +143,7 @@
     var zeigen = !!(a && !a.zeigen && a.erste);
     var warSichtbar = !b.hidden;
     if (zeigen) {
-      var w = a.erste, off = d.forecast && d.forecast.utc_offset_seconds || 0, kurz = Module.rechnen.warnKurz(w, off).split(' · ');
+      var w = a.erste, off = ortOffset(d, Date.now()), kurz = Module.rechnen.warnKurz(w, off).split(' · ');
       var stufe = kurz[0].replace(/^Stufe (\d) von 4$/, '$1');
       b.innerHTML = Module.warnSymbol();
       b.setAttribute('data-stufe', stufe);
@@ -202,7 +205,7 @@
     window.scrollTo(0, 0);
     offlineHinweis();
     if (!window.Bausteine || !z.ort) return;
-    var off = z.aktuell && z.aktuell.forecast && z.aktuell.forecast.utc_offset_seconds || 0;
+    var off = ortOffset(z.aktuell, Date.now());
     try {
       if (id === 'wetter') startMeteogrammZeigen();
       else if (id === 'graphs') Bausteine.graphs(z.ort);
@@ -282,9 +285,9 @@
     z.geoTimer = setTimeout(function () {
       var nr = ++z.geoNr;
       meld.textContent = 'Suche …';
-      holeJson(GEO_URL + '?name=' + encodeURIComponent(q) + '&count=8&language=de&format=json').then(function (j) {
+      holeJson(GEO_URL + '?name=' + encodeURIComponent(q) + '&count=20&language=de&format=json').then(function (j) {
         if (nr !== z.geoNr) return;
-        var liste = (j && j.results) || [];
+        var liste = WL.trefferSortieren(j && j.results, 8);
         if (!liste.length) { erg.hidden = true; erg.innerHTML = ''; meld.textContent = 'Keinen Ort zu „' + q + '“ gefunden. Versuche eine andere Schreibweise.'; return; }
         meld.textContent = liste.length + (liste.length === 1 ? ' Treffer' : ' Treffer');
         erg.innerHTML = liste.map(function (r, i) {
@@ -409,9 +412,11 @@
 
   function rendere(d, offline) {
     var ort = z.ort;
+    // Zeitumstellung: auch Daten aus dem Zwischenspeicher bekommen den UTC-Abstand von jetzt (die Stundenwerte sind Ortszeit und bleiben stehen)
+    var fc = Object.assign({}, d.forecast, { utc_offset_seconds: ortOffset(d, Date.now()) });
     var obj = {
       ort: { id: ort.id, name: ort.name, lat: ort.lat, lon: ort.lon, meer: !!ort.meer },
-      forecast: d.forecast, luft: d.luft || null, warnungen: d.warnungen || null, radar: d.radar || null, meer: d.meer || null,
+      forecast: fc, luft: d.luft || null, warnungen: d.warnungen || null, radar: d.radar || null, meer: d.meer || null,
       stand: d.stand, offline: offline === undefined ? !!d.offline : !!offline, einheiten: z.einheiten
     };
     var hatteDaten = !!z.aktuell;
@@ -436,7 +441,7 @@
     if (z.reiter === 'wetter') startMeteogrammZeigen();
     // Der Kartenreiter wurde ohne Daten geöffnet (Offset 0): mit dem Offset des Orts neu aufbauen
     if (!hatteDaten && (z.reiter === 'karten' || z.reiter === 'radsat') && window.Bausteine) {
-      try { Bausteine.karte(z.reiter, z.ort, z.orte, d.forecast.utc_offset_seconds || 0); } catch (e) { }
+      try { Bausteine.karte(z.reiter, z.ort, z.orte, ortOffset(d, Date.now())); } catch (e) { }
     }
   }
 

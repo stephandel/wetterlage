@@ -1,0 +1,95 @@
+{
+ "results": [
+  {
+   "id": 1,
+   "name": "Hamburg",
+   "latitude": 50.1,
+   "longitude": 8.1,
+   "country_code": "DE",
+   "country": "Deutschland",
+   "admin1": "Hamburg"
+  },
+  {
+   "id": 2,
+   "name": "Hamburg",
+   "latitude": 50.2,
+   "longitude": 8.2,
+   "country_code": "US",
+   "country": "USA",
+   "admin1": "New York"
+  },
+  {
+   "id": 3,
+   "name": "Hamburg",
+   "latitude": 50.3,
+   "longitude": 8.3,
+   "country_code": "US",
+   "country": "USA",
+   "admin1": "Pennsylvania"
+  },
+  {
+   "id": 4,
+   "name": "Hamburg",
+   "latitude": 50.4,
+   "longitude": 8.4,
+   "country_code": "AT",
+   "country": "Österreich",
+   "admin1": "Niederösterreich"
+  },
+  {
+   "id": 5,
+   "name": "Hamburg",
+   "latitude": 50.5,
+   "longitude": 8.5,
+   "country_code": "DE",
+   "country": "Deutschland",
+   "admin1": "Schleswig-Holstein"
+  },
+  {
+   "id": 6,
+   "name": "Hamburgo",
+   "latitude": 50.6,
+   "longitude": 8.6,
+   "country_code": "BR",
+   "country": "Brasilien",
+   "admin1": "Rio Grande do Sul"
+  },
+  {
+   "id": 7,
+   "name": "Hambourg",
+   "latitude": 50.7,
+   "longitude": 8.7,
+   "country_code": "FR",
+   "country": "Frankreich",
+   "admin1": "Grand Est"
+  },
+  {
+   "id": 8,
+   "name": "Hamburg",
+   "latitude": 50.8,
+   "longitude": 8.8,
+   "country_code": "JP",
+   "country": "Japan",
+   "admin1": "Tokio"
+  },
+  {
+   "id": 9,
+   "name": "Hamburg",
+   "latitude": 50.9,
+   "longitude": 8.9,
+   "country_code": "CA",
+   "country": "Kanada",
+   "admin1": "Ontario"
+  },
+  {
+   "id": 10,
+   "name": "Hamburg",
+   "latitude": 51.0,
+   "longitude": 9.0,
+   "country_code": "GB",
+   "country": "Vereinigtes Königreich",
+   "admin1": "England"
+  }
+ ],
+ "generationtime_ms": 1.0
+}

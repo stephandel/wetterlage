@@ -3,8 +3,9 @@
 
 /* Ergänzungen zu tokens.css */
 :root {
-  --sym-aktuell: 112px;
-  --sym-stunden: 60px;
+  --sym-aktuell: 76px;
+  --sym-stunden: 40px;
+  --hero-aktuell: calc(var(--fs-hero) * .5);
   --ring-liste: 1.75rem;   /* wächst mit der Schrift; die Zahl im Ring steht in SVG-Einheiten (.ring-zahl) und wächst mit dem Ring */
   --ring-gross: 4.5rem;
   --ring-dicke: 3;
@@ -119,10 +120,10 @@
 .aktuell { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
 .aktuell-links { padding-inline-end: var(--s3); }
 .aktuell-rechts { padding-inline-start: var(--s3); border-inline-start: 1px solid var(--trenner); }
-.aktuell-links { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s1); min-width: 0; }
+.aktuell-links { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: var(--s1); min-width: 0; }
 .sym-aktuell { width: var(--sym-aktuell); height: var(--sym-aktuell); }
-.hero { font-size: min(var(--fs-hero), 22vw); font-weight: 200; line-height: 1; color: var(--akzent-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.punkte { display: flex; gap: var(--s2); padding-top: var(--s1); }
+.hero { font-size: min(var(--hero-aktuell), 14vw); font-weight: 200; line-height: 1; color: var(--akzent-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.punkte { display: flex; gap: var(--s2); }
 .punkte i { width: var(--s2); height: var(--s2); border-radius: 50%; background: var(--label-3); }
 .punkte i.an { background: var(--label); }
 .wechsel { position: absolute; inset: 0; border-radius: var(--r-button); min-height: var(--tap); }
@@ -133,8 +134,12 @@
 .ansicht.aus { visibility: hidden; }
 .aktuell-label { align-self: flex-start; font-size: var(--fs-footnote); font-weight: 600; color: var(--akzent-2); }
 .aktuell-zeit { font-weight: 400; color: var(--label-2); font-variant-numeric: tabular-nums; }
-.wetter-text { font-size: var(--fs-title3); font-weight: 600; line-height: 1.2; margin-bottom: var(--s2) !important; }
-.ansicht-radar { justify-content: center; }
+.wetter-text { font-size: var(--fs-title3); font-weight: 600; line-height: 1.2; margin-bottom: var(--s1) !important; }
+.wind-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); margin-top: var(--s1); }
+.wind-wert { font-size: var(--fs-subhead); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.boeen { display: flex; flex-direction: column; margin-inline-start: auto; text-align: right; font-size: var(--fs-footnote); line-height: 1.2; color: var(--label-2); white-space: nowrap; }
+.boeen .zahl { color: var(--label); }
+.ansicht-radar { justify-content: center; --karte-hoehe: 150px; }
 .ansicht-radar .karte-box { margin-top: 0; }
 
 /* ---------- Karten ---------- */
@@ -152,14 +157,15 @@
 
 /* ---------- Stunden ---------- */
 .stunden { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
-.std { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--s1); min-width: 0; }
+.std { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; min-width: 0; }
 .std + .std { border-inline-start: 1px solid var(--trenner); }
 .std-zeit { font-size: var(--fs-subhead); font-weight: 600; }
 .std-text { font-size: var(--fs-footnote); color: var(--label-2); }
 .sym-stunden { width: var(--sym-stunden); height: var(--sym-stunden); }
-.std-temp { font-size: var(--fs-title2); font-weight: 600; color: var(--akzent-2); font-variant-numeric: tabular-nums; }
-.std-regen, .std-wind { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0 var(--s1); font-size: var(--fs-subhead); font-variant-numeric: tabular-nums; }
-.std-wind { font-size: var(--fs-footnote); }
+.std-zeile { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0 var(--s2); font-variant-numeric: tabular-nums; }
+.std-regen { display: inline-flex; align-items: center; gap: 0 var(--s1); font-size: var(--fs-subhead); }
+.std-temp { font-size: var(--fs-title3); font-weight: 600; color: var(--akzent-2); }
+.std-wind { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0 var(--s1); font-size: var(--fs-footnote); font-variant-numeric: tabular-nums; }
 
 /* ---------- Meteogramm ---------- */
 .k-meteogramm { display: flex; flex-direction: column; }
@@ -303,7 +309,7 @@
   #module { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; }
   #module > .kachel { grid-column: span 1; }
   #module > .k-warnung, #module > .k-fehler, #module > .k-pollen { grid-column: 1 / -1; }
-  .hero { font-size: calc(min(var(--fs-hero), 22vw) * .8); }
+  .hero { font-size: calc(min(var(--hero-aktuell), 14vw) * .8); }
   .wverlauf { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 
@@ -313,7 +319,8 @@
 [data-schrift="150"] .aktuell-rechts { padding-inline-start: 0; border-inline-start: 0; }
 [data-schrift="150"] .liste.tage { --tage-spalten: minmax(min-content, 1.2fr) repeat(3, auto); }
 [data-schrift="150"] .tag .t-sr { grid-column: 1 / 4; grid-row: 2; flex-direction: row; flex-wrap: wrap; gap: var(--s1) var(--s4); }
-[data-schrift="150"] .tag .t-wind { grid-column: 4; grid-row: 2; }
+[data-schrift="150"] .tag .t-wind { grid-column: 4; grid-row: 2; flex-direction: row; align-items: baseline; gap: 0 var(--s1); }
+[data-schrift="150"] .tag .t-luft { flex-direction: row; align-items: center; gap: var(--s1); }
 [data-schrift="150"] .wverlauf { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 [data-schrift="150"] .stunden { grid-template-columns: minmax(0, 1fr); gap: var(--s1); }
 [data-schrift="150"] .rose-gross { width: 6rem; height: 6rem; }

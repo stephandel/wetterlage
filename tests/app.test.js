@@ -39,6 +39,7 @@ async function mockKontext(browser, opt) {
       if (/latitude=[^&]*,/.test(u.search)) return r.abort();   // Gitter der Karten: nicht aufgezeichnet
       return json('meteogramm.json');
     }
+    if (u.hostname === 'geocoding-api.open-meteo.com') return json('geocoding.json');
     if (u.hostname === 'air-quality-api.open-meteo.com') return json('luft.json');
     if (u.hostname === 'api.brightsky.dev') return json('warnung.json');
     if (u.hostname === 'marine-api.open-meteo.com') return json('meer.json');
@@ -341,14 +342,14 @@ function wahr(b, was) { if (!b) throw new Error(was); }
   });
 
   for (const [prozent, grenze] of [[100, 0.5], [150, 1]]) {
-    await pruefe('9c Höhen-Budget bei ' + prozent + ' % Schrift: keine Kachel in #module höher als ' + (grenze * 100) + ' % von 844 px (Warnung aufgeklappt ausgenommen; Tagesliste bei 150 % nur unter 1,4 Bildschirmen)', async () => {
+    await pruefe('9c Höhen-Budget bei ' + prozent + ' % Schrift: keine Kachel in #module höher als ' + (grenze * 100) + ' % von 844 px (Warnung aufgeklappt ausgenommen; Tagesliste bei 150 % nur unter 1,2 Bildschirmen, Stunden bei 150 % unter 700 px)', async () => {
       const { ctx, page } = await mockSeite(browser);
       if (prozent !== 100) await SCHRIFT(page, prozent);
       await page.waitForTimeout(1200);
       const h = await page.evaluate(() => [...document.querySelectorAll('#module > .kachel')].map((e) => [e.className.split(' ')[1], Math.round(e.getBoundingClientRect().height)]));
       console.log('       Höhen ' + prozent + ' %: ' + h.map((x) => x[0].replace('k-', '') + ' ' + x[1]).join(', '));
-      // Ausnahme: die Tagesliste bei 150 % (acht Tage, je zwei Zeilen; ohne Datenverlust nicht unter 844 px zu bringen), dort gilt nur: unter 1,4 Bildschirmen
-      const zu = h.filter((x) => (prozent === 150 && x[0] === 'k-tage') ? x[1] > 844 * 1.4 : x[1] > 844 * grenze);
+      // Ausnahme: die Tagesliste bei 150 % (acht Tage, je zwei Zeilen; Sonne und Regen brechen um, ohne Datenverlust nicht unter 844 px zu bringen), dort gilt nur: unter 1,2 Bildschirmen
+      const zu = h.filter((x) => (prozent === 150 && x[0] === 'k-tage') ? x[1] > 844 * 1.2 : (prozent === 150 && x[0] === 'k-stunden') ? x[1] > 700 : x[1] > 844 * grenze);
       gleich(zu, [], 'Kacheln über ' + Math.round(844 * grenze) + ' px');
       await ctx.close();
     });
@@ -404,6 +405,64 @@ function wahr(b, was) { if (!b) throw new Error(was); }
     wahr(/^Aktuell \d\d:\d\d$/.test(a.text), 'Text: ' + a.text);
     gleich(a.farbe, a.ak2, 'Farbe');
     wahr(a.oben && !a.rechtsAlt, 'Label nicht über dem Symbol oder noch rechts vorhanden');
+    await ctx.close();
+  });
+
+  await pruefe('12b Aktuell-Kachel wie die Vorschau: Höhe ≤ 240 px, kein sichtbares „Aktuell in …“, Böen-Wert, Wechsel Werte/Radar geht und das Radar wird nicht abgeschnitten', async () => {
+    const { ctx, page } = await mockSeite(browser);
+    await page.addStyleTag({ content: SAFE });
+    await page.waitForTimeout(800);
+    const a = await page.evaluate(() => {
+      const k = document.querySelector('.k-aktuell'), kopf = k.querySelector('.kachel-kopf'), r = kopf.getBoundingClientRect();
+      return { h: Math.round(k.getBoundingClientRect().height), kopfSichtbar: r.width > 2 && r.height > 2, boeen: ((k.querySelector('.boeen') || {}).textContent || '').replace(/\s+/g, ' ').replace('Böen', 'Böen '), sichtbarText: /Aktuell in/.test(k.innerText) };
+    });
+    wahr(a.h <= 240, 'Höhe ' + a.h + ' px');
+    wahr(!a.kopfSichtbar && !a.sichtbarText, 'Überschrift „Aktuell in …“ noch sichtbar');
+    gleich(a.boeen.replace(/\s+/g, ' '), 'Böen 22 km/h', 'Böen');
+    await page.click('.k-aktuell .wechsel'); await page.waitForTimeout(500);
+    const b = await page.evaluate(() => {
+      const k = document.querySelector('.k-aktuell'), box = k.querySelector('.ansicht-radar .karte-box').getBoundingClientRect(), kb = k.getBoundingClientRect();
+      return { sichtbar: getComputedStyle(k.querySelector('.ansicht-radar')).visibility, h: Math.round(box.height), innen: box.top >= kb.top && box.bottom <= kb.bottom + 0.5, hk: Math.round(kb.height) };
+    });
+    gleich(b.sichtbar, 'visible', 'Radar-Ansicht');
+    wahr(b.h >= 150 && b.innen, 'Radar abgeschnitten: ' + JSON.stringify(b));
+    wahr(b.hk <= 260, 'Höhe in der Radar-Ansicht ' + b.hk);
+    await page.click('.k-aktuell .wechsel'); await page.waitForTimeout(300);
+    gleich(await page.evaluate(() => getComputedStyle(document.querySelector('.k-aktuell .ansicht-werte')).visibility), 'visible', 'zurück zu Werten');
+    await ctx.close();
+  });
+
+  await pruefe('12c Stunden-Kachel kompakt: Höhe ≤ 190 px; je Spalte Uhrzeit, Symbol, Text, Regen und Temperatur in einer Zeile, Wind', async () => {
+    const { ctx, page } = await mockSeite(browser);
+    await page.waitForTimeout(800);
+    const s = await page.evaluate(() => {
+      const k = document.querySelector('.k-stunden'), sp = k.querySelector('.std'), z = sp.querySelector('.std-regen').getBoundingClientRect(), t = sp.querySelector('.std-temp').getBoundingClientRect();
+      const ak2 = (() => { const e = document.createElement('span'); e.style.color = 'var(--akzent-2)'; document.body.appendChild(e); const c = getComputedStyle(e).color; e.remove(); return c; })();
+      return { h: Math.round(k.getBoundingClientRect().height), eineZeile: Math.abs((z.top + z.bottom) / 2 - (t.top + t.bottom) / 2) < 6, tempFarbe: getComputedStyle(sp.querySelector('.std-temp')).color === ak2, text: !!sp.querySelector('.std-text') && sp.querySelector('.std-text').textContent.length > 2, wind: !!sp.querySelector('.std-wind') };
+    });
+    wahr(s.h <= 190, 'Höhe ' + s.h + ' px');
+    wahr(s.eineZeile && s.tempFarbe && s.text && s.wind, JSON.stringify(s));
+    await ctx.close();
+  });
+
+  await pruefe('12d Ortszeit: liegt der Ort in einer anderen Zeitzone als das Gerät, steht „Stand hh:mm Ortszeit“ in der Kopfzeile (New York: ja, Berlin: nein), Kopfzeile läuft nicht über', async () => {
+    for (const [zone, soll] of [['America/New_York', true], ['Europe/Berlin', false]]) {
+      const { ctx, page } = await mockSeite(browser, { timezoneId: zone });
+      const t = (await page.textContent('#kopf-stand')).trim();
+      gleich(/^Stand \d\d:\d\d Ortszeit$/.test(t), soll, zone + ': „' + t + '“');
+      wahr(await page.evaluate(() => { const e = document.getElementById('kopf-stand'); return e.scrollWidth <= e.clientWidth + 1; }), 'Kopfzeile läuft über');
+      await ctx.close();
+    }
+  });
+
+  await pruefe('12e Ortssuche: Treffer mit Deutschland zuerst, dann Europa, höchstens 8; Anfrage mit count=20', async () => {
+    const { ctx, page, st } = await mockSeite(browser);
+    await page.click('#knopf-suche'); await page.fill('#orte-suche', 'Hamburg'); await page.waitForSelector('#orte-ergebnisse .ort-name', { timeout: 5000 });
+    const l = await page.$$eval('#orte-ergebnisse .ort-name small', (els) => els.map((e) => e.textContent));
+    wahr(st.anfragen.some((u) => /geocoding-api\.open-meteo\.com.*count=20/.test(u)), 'count=20 fehlt');
+    gleich(l.length, 8, 'Anzahl');
+    wahr(/Deutschland/.test(l[0]) && /Deutschland/.test(l[1]), 'DE nicht zuerst: ' + l.join(' | '));
+    wahr(/Österreich|Frankreich|Vereinigtes/.test(l[2]) && !/USA|Brasilien/.test(l.slice(0, 5).join()), 'Europa nicht vor Rest: ' + l.join(' | '));
     await ctx.close();
   });
 
