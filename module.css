@@ -13,10 +13,11 @@
   --mond-gross: 72px;
   --ikon-klein: 17px;
   --karte-hoehe: 180px;
-  --balken-hoehe: 64px;
+  --balken-hoehe: 40px;
   --linie: 2px;
   --balken-heute: 4px;
   --sonne-marke: var(--orange);
+  --mond-licht: color-mix(in srgb, var(--gelb) 40%, var(--bg-2));   /* hell: Lichtseite getönt, damit sie sich von der Kachel abhebt */
   /* Tagesname und Höchstwert: --akzent-2 hielte auf der zweiten Tagesfarbe (--tag-b) hell nur 4,2:1, darum 15 % zu --label (dunkel unverändert) */
   --akzent-2-text: color-mix(in srgb, var(--akzent-2) 85%, var(--label));
   --radar-leicht: color-mix(in srgb, var(--blau) 45%, var(--bg-2));
@@ -32,10 +33,15 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --akzent-2-text: var(--akzent-2);
-    --warn-1: color-mix(in srgb, var(--gelb) 38%, var(--bg-2));
-    --warn-2: color-mix(in srgb, var(--orange) 45%, var(--bg-2));
-    --warn-3: color-mix(in srgb, var(--rot) 50%, var(--bg-2));
+    /* Warnkachel dunkel: Fläche wie jede Kachel, die Warnfarbe steht im Randstreifen und im Dreieck */
+    --warn-1: var(--bg-2);
+    --warn-2: var(--bg-2);
+    --warn-3: var(--bg-2);
+    --warn-4: var(--bg-2);
   }
+  .warn-1 .warn-sym { color: var(--gelb); }
+  .warn-2 .warn-sym { color: var(--orange); }
+  .warn-3 .warn-sym, .warn-4 .warn-sym { color: var(--rot); }
 }
 
 /* ---------- Raster ---------- */
@@ -157,16 +163,16 @@
 
 /* ---------- Meteogramm ---------- */
 .k-meteogramm { display: flex; flex-direction: column; }
-#start-meteogramm { flex: 1; min-width: 0; }
+#start-meteogramm { flex: 1; min-width: 0; cursor: pointer; }
 .fussleiste { margin-top: var(--s2); }
 .fussleiste .chip { max-inline-size: 100%; padding-inline: var(--s3); font-size: var(--fs-subhead); white-space: nowrap; }
 [data-schrift] .fussleiste .chip { white-space: normal; text-align: center; }
 
 /* ---------- Tagesliste ---------- */
 .k-tage { padding-inline: 0; padding-bottom: 0; overflow: hidden; }
-.k-tage .kachel-kopf { padding-inline: var(--s4); }
+.k-tage .kachel-kopf { padding-inline: var(--s4); margin-bottom: var(--s1); }
 .liste.tage { --tage-spalten: minmax(min-content, 1.2fr) repeat(5, auto); display: grid; grid-template-columns: var(--tage-spalten); justify-content: space-between; column-gap: var(--s2); border-radius: 0; background: none; }
-.liste.tage > .tag { display: grid; grid-template-columns: var(--tage-spalten); grid-column: 1 / -1; align-items: center; justify-content: space-between; column-gap: var(--s2); min-height: var(--tap); padding: var(--s2) var(--s3); font-variant-numeric: tabular-nums; }
+.liste.tage > .tag { display: grid; grid-template-columns: var(--tage-spalten); grid-column: 1 / -1; align-items: center; justify-content: space-between; column-gap: var(--s2); padding: 2px var(--s3); line-height: 1.15;   /* knapp, damit acht Tage unter der Höhengrenze (50 % des Bildschirms) bleiben */ font-variant-numeric: tabular-nums; }
 @supports (grid-template-columns: subgrid) { .liste.tage > .tag { grid-template-columns: subgrid; } }
 .tag.heute { box-shadow: inset var(--balken-heute) 0 0 var(--akzent-2); }
 .t-tag { display: flex; flex-direction: column; min-width: 0; }
@@ -176,13 +182,14 @@
 .t-temp { display: flex; flex-direction: column; }
 .tmax { font-size: var(--fs-subhead); font-weight: 700; color: var(--akzent-2-text); }
 .tmin { font-size: var(--fs-subhead); color: var(--label-2); }
-.t-sr { display: flex; flex-direction: column; gap: var(--s1); font-size: var(--fs-footnote); min-width: 0; }
+.t-sr { display: flex; flex-direction: column; gap: 0; font-size: var(--fs-footnote); min-width: 0; }
 .t-sr .zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s1); }
 .t-sr .ikon-klein { color: var(--label-2); }
 .t-sr .pop { color: var(--label-2); white-space: nowrap; }
 .t-luft { display: flex; flex-direction: column; align-items: center; }
+.t-luft .luft-wort { line-height: 1.1; }   /* ab Tag 6 leer, die Zelle hält das Raster */
+.fuss-tage { margin: 0; padding: 2px var(--s4) var(--s1); line-height: 1.1; }
 .luft-wort { font-size: var(--fs-caption); }
-.leer-strich { color: var(--label-2); }
 .t-wind { display: flex; flex-direction: column; font-size: var(--fs-footnote); }   /* Zahl und Einheit zusammen, Richtung darunter */
 .nowrap { white-space: nowrap; }
 
@@ -210,13 +217,14 @@
 .tipp > span { max-inline-size: 65ch; }
 
 /* ---------- Sonne ---------- */
-.bogen { display: block; width: 100%; max-width: 24rem; margin: 0 auto; }
+.bogen { display: block; width: 100%; max-width: 20rem; margin: 0 auto; }
 .horizont { stroke: var(--trenner); stroke-width: var(--strich); }
 .bogen-bahn, .bogen-tag { fill: none; stroke-width: calc(var(--strich) * 2); stroke-linecap: round; }
 .bogen-bahn { stroke: var(--trenner); stroke-dasharray: 2 3; }
 .bogen-tag { stroke: var(--sonne-marke); }
 .sonne-punkt { fill: var(--sonne-marke); stroke: var(--bg-2); stroke-width: 2; }
-.sonne-zeiten { display: flex; justify-content: space-between; gap: var(--s3); margin-top: var(--s2); }
+.sonne-punkt.nacht { fill: var(--bg-2); stroke: var(--sonne-marke); }   /* Sonne nicht am Himmel: Ring am Horizont */
+.sonne-zeiten { display: flex; justify-content: space-between; gap: var(--s3); margin-top: var(--s1); }
 .sonne-zeiten p { display: flex; align-items: center; gap: var(--s2); }
 .sonne-zeiten .ikon { width: var(--ikon-groesse); height: var(--ikon-groesse); flex: none; }
 .sonne-zeiten b { display: block; font-size: var(--fs-body); }
@@ -224,8 +232,8 @@
 /* ---------- Mond ---------- */
 .mond-kopf { display: flex; align-items: center; gap: var(--s4); }
 .mond { width: var(--mond-gross); height: var(--mond-gross); flex: none; }
-.mond-dunkel { fill: color-mix(in srgb, var(--label) 70%, var(--bg-2)); stroke: var(--trenner); stroke-width: var(--strich); }
-.mond-hell { fill: var(--bg-2); }
+.mond-dunkel { fill: color-mix(in srgb, var(--label) 70%, var(--bg-2)); stroke: var(--label-2); stroke-width: calc(var(--strich) * 1.5); }   /* Umriss in --label-2 (mind. 3:1 auf der Kachel) */
+.mond-hell { fill: var(--mond-licht); }
 @media (prefers-color-scheme: dark) { .mond-dunkel { fill: var(--fuellung); } .mond-hell { fill: var(--label); } }
 .mond-name { font-size: var(--fs-title3); font-weight: 600; }
 .mond-kopf .deutung { margin-top: var(--s1); }
@@ -233,23 +241,27 @@
 .phasen li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 var(--s3); font-size: var(--fs-body); }
 
 /* ---------- Wind ---------- */
-.wind-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4); }
+.wind-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }   /* Rose links, Werte rechts; bei großer Schrift darf es umbrechen */
+.wind-kopf > div { flex: 1; min-width: 10rem; }
 .wind-kopf p { font-size: var(--fs-body); }
+.wind-kopf .deutung { margin-top: var(--s1); }
 .wind-gross { font-size: var(--fs-title1) !important; font-weight: 600; line-height: 1.1; }
-.wverlauf { list-style: none; margin: var(--s2) 0 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--s3) var(--s1); }
-.wverlauf li { display: flex; flex-direction: column; align-items: center; gap: var(--s1); font-variant-numeric: tabular-nums; }
+.wverlauf { list-style: none; margin: var(--s1) 0 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--s2) var(--s1); }
+.wverlauf li { display: flex; flex-direction: column; align-items: center; gap: 0; font-variant-numeric: tabular-nums; }
+.w-zeile { display: inline-flex; align-items: center; gap: var(--s1); font-size: var(--fs-subhead); }
 .wverlauf .klein { font-size: var(--fs-caption); white-space: nowrap; }
 @media (min-width: 768px) { .wverlauf { grid-template-columns: repeat(9, minmax(0, 1fr)); } }
 
 /* ---------- Regenradar ---------- */
 .k-radar { display: flex; flex-direction: column; }
-.regen-satz { margin-bottom: var(--s3) !important; font-size: var(--fs-title3); font-weight: 600; line-height: 1.2; max-inline-size: 65ch; }
+.regen-satz { margin-bottom: var(--s2) !important; font-size: var(--fs-title3); font-weight: 600; line-height: 1.2; max-inline-size: 65ch; }
 .balken-reihe { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: var(--s1); height: var(--balken-hoehe); align-items: end; }
 .balken { display: flex; align-items: flex-end; height: 100%; }
 .balken i { display: block; width: 100%; border-radius: var(--s1) var(--s1) 0 0; background: var(--akzent); height: var(--hoehe); }
 .balken.trocken i { height: var(--linie); border-radius: 0; background: var(--trenner); }
 .balken-achse { display: flex; justify-content: space-between; margin-top: var(--s1); font-size: var(--fs-caption); color: var(--label-2); }
-.karte-hoch { min-height: var(--karte-hoehe); flex: none; }
+.karte-hoch { min-height: 150px; flex: none; }
+.balken-reihe.trocken-ganz { height: var(--s3); }   /* alles trocken: nur eine Linie, keine Leerfläche über den Strichen */
 .legende { list-style: none; margin: var(--s3) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); font-size: var(--fs-footnote); }
 .legende li { display: inline-flex; align-items: center; gap: var(--s2); }
 .legende i { width: var(--s4); height: var(--s3); border-radius: var(--s1); }
@@ -263,8 +275,8 @@
 .pollen li:first-child { border-top: 0; }
 .p-name { font-size: var(--fs-body); }
 .punkte-reihe { display: flex; gap: var(--s1); }
-.punkte-reihe i { width: var(--s3); height: var(--s3); border-radius: 50%; background: var(--fuellung); }
-.punkte-reihe i.an { background: var(--akzent); }
+.punkte-reihe i { box-sizing: border-box; width: var(--s3); height: var(--s3); border-radius: 50%; border: calc(var(--strich) * 1px) solid var(--label-2); background: transparent; }   /* leer: Umriss, auch dunkel sichtbar */
+.punkte-reihe i.an { background: var(--akzent); border-color: var(--akzent); }
 .p-wort { text-align: right; font-size: var(--fs-subhead); font-weight: 600; }
 .p-wort.still { font-weight: 400; color: var(--label-2); }
 @media (min-width: 768px) { .pollen { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pollen li:nth-child(2) { border-top: 0; } }
@@ -303,7 +315,8 @@
 [data-schrift="150"] .tag .t-sr { grid-column: 1 / 4; grid-row: 2; flex-direction: row; flex-wrap: wrap; gap: var(--s1) var(--s4); }
 [data-schrift="150"] .tag .t-wind { grid-column: 4; grid-row: 2; }
 [data-schrift="150"] .wverlauf { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-[data-schrift="150"] .stunden { grid-template-columns: minmax(0, 1fr); }
+[data-schrift="150"] .stunden { grid-template-columns: minmax(0, 1fr); gap: var(--s1); }
+[data-schrift="150"] .rose-gross { width: 6rem; height: 6rem; }
 [data-schrift="150"] .std + .std { border-inline-start: 0; border-top: 1px solid var(--trenner); padding-top: var(--s2); }
 
 /* ---------- Kontrast, Bewegung ---------- */

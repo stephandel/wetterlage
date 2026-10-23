@@ -117,11 +117,11 @@
     return 'himmel-bewoelkt';
   };
 
-  // ---------- Luftqualität (Europäischer Index) ----------
+  // ---------- Luftqualität (Europäischer Index: Gut ≤ 40, Mäßig ≤ 80, darüber Schlecht) ----------
   WL.luftStufe = function (aqi) {
     if (aqi == null || isNaN(aqi)) return { wort: '–', farbe: 'var(--label-3)', stufe: 0 };
-    if (aqi <= 20) return { wort: 'Gut', farbe: 'var(--gruen)', stufe: 1 };
-    if (aqi <= 60) return { wort: 'Mäßig', farbe: 'var(--orange)', stufe: 2 };
+    if (aqi <= 40) return { wort: 'Gut', farbe: 'var(--gruen)', stufe: 1 };
+    if (aqi <= 80) return { wort: 'Mäßig', farbe: 'var(--orange)', stufe: 2 };
     return { wort: 'Schlecht', farbe: 'var(--rot)', stufe: 3 };
   };
   // Pollen (Körner je m³) → Stufe 0–3 mit Wort; null = keine Daten (außerhalb Saison oder Region)

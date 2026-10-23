@@ -33,6 +33,17 @@ const PAARE = [
   ['Warn-Symbol Stufe 2 in der Kopfleiste – Symbol 3:1', 'var(--warn-sym-2)', 'var(--leiste-bg)', 3],
   ['Warn-Symbol Stufe 3 in der Kopfleiste – Symbol 3:1', 'var(--warn-sym-3)', 'var(--leiste-bg)', 3],
   ['Warn-Symbol Stufe 4 in der Kopfleiste – Symbol 3:1', 'var(--warn-sym-4)', 'var(--leiste-bg)', 3],
+  // Warnkachel: hell Textfarbe auf getönter Fläche, dunkel Warnfarbe auf --bg-2 (Dreieck und Randstreifen, Symbol 3:1)
+  ['Warn-Dreieck Stufe 1 auf der Warnkachel (hell Textfarbe, dunkel --gelb) – Symbol 3:1', ['var(--label)', 'var(--gelb)'], 'var(--warn-1)', 3],
+  ['Warn-Dreieck Stufe 2 auf der Warnkachel (hell Textfarbe, dunkel --orange) – Symbol 3:1', ['var(--label)', 'var(--orange)'], 'var(--warn-2)', 3],
+  ['Warn-Dreieck Stufe 3/4 auf der Warnkachel (hell Textfarbe, dunkel --rot) – Symbol 3:1', ['var(--label)', 'var(--rot)'], 'var(--warn-3)', 3],
+  ['Warn-Randstreifen Stufe 1 dunkel (--gelb auf --bg-2; hell Textfarbe als Platzhalter) – 3:1', ['var(--label)', 'var(--gelb)'], 'var(--bg-2)', 3],
+  ['Warn-Randstreifen Stufe 2 dunkel (--orange auf --bg-2; hell Textfarbe als Platzhalter) – 3:1', ['var(--label)', 'var(--orange)'], 'var(--bg-2)', 3],
+  ['Warn-Randstreifen Stufe 3/4 dunkel (--rot auf --bg-2; hell Textfarbe als Platzhalter) – 3:1', ['var(--label)', 'var(--rot)'], 'var(--bg-2)', 3],
+  ['Mond-Umriss (--label-2) auf Kachel – Symbol 3:1', 'var(--label-2)', 'var(--bg-2)', 3],
+  ['Mond: Lichtseite gegen Schattenseite (hell --mond-licht auf getönter Scheibe, dunkel --label auf --fuellung) – Symbol 3:1', ['var(--mond-licht)', 'var(--label)'], 'color-mix(in srgb, color-mix(in srgb, var(--label) 70%, var(--bg-2)) 100%, var(--bg-2))|color-mix(in srgb, var(--fuellung) 100%, var(--bg-2))', 3],
+  ['Pollen-Punkt leer (Umriss --label-2) auf Kachel – Symbol 3:1', 'var(--label-2)', 'var(--bg-2)', 3],
+  ['Pollen-Punkt gefüllt (--akzent) auf Kachel – Symbol 3:1', 'var(--akzent)', 'var(--bg-2)', 3],
   ['Chip „Karte öffnen“ (label auf fuellung über Kachel)', 'var(--label)', 'color-mix(in srgb, var(--fuellung) 100%, var(--bg-2))', 4.5],
   ['Chip-Symbol (Akzent auf fuellung) – Symbol 3:1', 'var(--akzent)', 'color-mix(in srgb, var(--fuellung) 100%, var(--bg-2))', 3],
   ['Radar-Chip „04:30 Uhr“ (label auf bg-2 88 %)', 'var(--label)', 'var(--bg-2)', 4.5],
@@ -62,6 +73,7 @@ const verhaeltnis = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x
     await page.goto('http://localhost:' + PORT + '/', { waitUntil: 'load' });
     const farben = await page.evaluate(([paare, dunkel]) => paare.map(([n, f, b]) => {
       if (Array.isArray(f)) f = f[dunkel ? 1 : 0];
+      if (b.includes('|')) b = b.split('|')[dunkel ? 1 : 0];   // Hintergrund „hell|dunkel“
       const e = document.createElement('div'); e.style.color = f; e.style.backgroundColor = b; document.body.appendChild(e);
       const cs = getComputedStyle(e), r = [cs.color, cs.backgroundColor]; e.remove();
       const s = document.createElement('div'); s.style.backgroundColor = 'var(--bg)'; document.body.appendChild(s); r.push(getComputedStyle(s).backgroundColor); s.remove();

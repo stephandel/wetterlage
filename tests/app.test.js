@@ -153,7 +153,7 @@ function wahr(b, was) { if (!b) throw new Error(was); }
     await ctx.close();
   });
 
-  await pruefe('9 Start-Meteogramm: halbe Kachelbreite, kein seitliches Scrollen, Temperaturlinie da, Modellwahl/Werteliste/Knopfleiste/Hinweis ausgeblendet, kein Seitenfehler', async () => {
+  await pruefe('9 Start-Meteogramm: volle Kachelbreite, kein seitliches Scrollen, Temperaturlinie da, Modellwahl/Werteliste/Knopfleiste/Hinweis ausgeblendet, kein Seitenfehler', async () => {
     const { ctx, page, st } = await mockSeite(browser);
     await page.waitForSelector('#start-meteogramm path.mg-linie', { state: 'attached', timeout: 15000 });
     await page.waitForTimeout(800);
@@ -164,7 +164,7 @@ function wahr(b, was) { if (!b) throw new Error(was); }
     });
     wahr(m.sw <= 390, 'scrollWidth ' + m.sw);
     wahr(m.mw <= m.kw + 0.5, 'Baustein ' + m.mw + ' px breiter als die Kachel ' + m.kw + ' px');
-    wahr(m.kw < 200, 'Kachel nicht halb breit: ' + m.kw);
+    wahr(m.kw > 330, 'Kachel nicht in voller Breite: ' + m.kw);
     wahr(m.d > 20, 'keine Temperaturlinie');
     gleich(m.aus.filter((a) => a !== 'none' && a !== 'fehlt'), [], 'sichtbare Teile, die ausgeblendet sein sollen');
     gleich(st.fehler, [], 'pageerror (u. a. ResizeObserver)');
@@ -322,6 +322,76 @@ function wahr(b, was) { if (!b) throw new Error(was); }
     wahr(Math.abs(ul - ur) <= 40, 'Unterkante links ' + Math.round(ul) + ' ≠ rechts ' + Math.round(ur));
     wahr(q.sw <= 844, 'scrollWidth ' + q.sw);
     await ctx.close();
+  });
+
+  await pruefe('9b Start-Meteogramm: Tipp auf die Diagrammfläche öffnet den Reiter Graphs; nach einer Wischbewegung nicht; kein Overlay über dem Diagramm; Knopf „Graphs öffnen“ bleibt', async () => {
+    const { ctx, page } = await mockSeite(browser);
+    await page.waitForSelector('#start-meteogramm path.mg-linie', { state: 'attached', timeout: 15000 });
+    await page.waitForTimeout(800);
+    await page.locator('.k-meteogramm').scrollIntoViewIfNeeded();
+    const b = await page.locator('#start-meteogramm').boundingBox(), mx = b.x + b.width / 2, my = b.y + b.height / 2;
+    const treffer = await page.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return !!e && !!e.closest('#start-meteogramm') && !e.closest('button'); }, [mx, my]);
+    wahr(treffer, 'über dem Diagramm liegt ein fremdes Element (Overlay oder Knopf)');
+    wahr(await page.locator('.k-meteogramm button[data-aktion="graphs"]').count() >= 1, 'Knopf „Graphs öffnen“ fehlt');
+    await page.mouse.move(mx - 60, my); await page.mouse.down(); await page.mouse.move(mx + 60, my, { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(300);
+    gleich(await page.getAttribute('#tab-graphs', 'aria-selected'), 'false', 'Reiter nach einer Wischbewegung');
+    await page.mouse.click(mx, my); await page.waitForTimeout(400);
+    gleich(await page.getAttribute('#tab-graphs', 'aria-selected'), 'true', 'Reiter nach Tipp auf die Diagrammfläche');
+    await ctx.close();
+  });
+
+  for (const [prozent, grenze] of [[100, 0.5], [150, 1]]) {
+    await pruefe('9c Höhen-Budget bei ' + prozent + ' % Schrift: keine Kachel in #module höher als ' + (grenze * 100) + ' % von 844 px (Warnung aufgeklappt ausgenommen; Tagesliste bei 150 % nur unter 1,4 Bildschirmen)', async () => {
+      const { ctx, page } = await mockSeite(browser);
+      if (prozent !== 100) await SCHRIFT(page, prozent);
+      await page.waitForTimeout(1200);
+      const h = await page.evaluate(() => [...document.querySelectorAll('#module > .kachel')].map((e) => [e.className.split(' ')[1], Math.round(e.getBoundingClientRect().height)]));
+      console.log('       Höhen ' + prozent + ' %: ' + h.map((x) => x[0].replace('k-', '') + ' ' + x[1]).join(', '));
+      // Ausnahme: die Tagesliste bei 150 % (acht Tage, je zwei Zeilen; ohne Datenverlust nicht unter 844 px zu bringen), dort gilt nur: unter 1,4 Bildschirmen
+      const zu = h.filter((x) => (prozent === 150 && x[0] === 'k-tage') ? x[1] > 844 * 1.4 : x[1] > 844 * grenze);
+      gleich(zu, [], 'Kacheln über ' + Math.round(844 * grenze) + ' px');
+      await ctx.close();
+    });
+  }
+
+  await pruefe('9d Warnkachel dunkel: Fläche wie eine normale Kachel (--bg-2), Randstreifen in voller Warnfarbe, Warndreieck in der Warnfarbe; hell bleibt getönt', async () => {
+    for (const modus of ['dark', 'light']) {
+      const { ctx, page } = await mockSeite(browser, { colorScheme: modus });
+      const w = await page.evaluate(() => {
+        const farbe = (v, prop) => { const t = document.createElement('span'); t.style[prop || 'color'] = v; document.body.appendChild(t); const c = getComputedStyle(t)[prop || 'color']; t.remove(); return c; };
+        const k = document.querySelector('.k-warnung'), n = document.querySelector('.k-aktuell'), sym = k.querySelector('.warn-sym');
+        return { bg: getComputedStyle(k).backgroundColor, bgNormal: getComputedStyle(n).backgroundColor, schatten: getComputedStyle(k).boxShadow, gelb: farbe('var(--gelb)'), sym: getComputedStyle(sym).color, label: farbe('var(--label)') };
+      });
+      if (modus === 'dark') {
+        gleich(w.bg, w.bgNormal, 'Fläche dunkel');
+        wahr(w.schatten.includes(w.gelb), 'Randstreifen nicht in voller Warnfarbe: ' + w.schatten + ' / ' + w.gelb);
+        gleich(w.sym, w.gelb, 'Warndreieck dunkel in der Warnfarbe');
+      } else {
+        wahr(w.bg !== w.bgNormal, 'hell: Fläche nicht mehr getönt');
+        gleich(w.sym, w.label, 'Warndreieck hell in Textfarbe');
+      }
+      await ctx.close();
+    }
+  });
+
+  await pruefe('9e Mond hell: Lichtseite getönt (nicht Kachelfarbe) mit Umriss in --label-2; Pollen-Punkte dunkel mit Umriss in --label-2', async () => {
+    const { ctx, page } = await mockSeite(browser, { colorScheme: 'light' });
+    const m = await page.evaluate(() => {
+      const hell = document.querySelector('.mond-hell'), dunkel = document.querySelector('.mond-dunkel'), n = document.querySelector('.k-mond');
+      return { hell: getComputedStyle(hell).fill, kachel: getComputedStyle(n).backgroundColor, rand: getComputedStyle(dunkel).stroke, randB: parseFloat(getComputedStyle(dunkel).strokeWidth), umrissHell: getComputedStyle(hell).stroke };
+    });
+    wahr(m.hell !== m.kachel && m.hell !== 'rgb(255, 255, 255)', 'Lichtseite hell wie die Kachel: ' + m.hell + ' / ' + m.kachel);
+    wahr(m.randB >= 1.5, 'Umriss zu dünn: ' + m.randB);
+    await ctx.close();
+    const d = await mockSeite(browser, { colorScheme: 'dark' });
+    const p = await d.page.evaluate(() => {
+      const leer = document.querySelector('.punkte-reihe i:not(.an)'), cs = (e) => getComputedStyle(e);
+      const t = document.createElement('span'); t.style.color = 'var(--label-2)'; document.body.appendChild(t); const l2 = getComputedStyle(t).color; t.remove();
+      return { leerRand: cs(leer).borderTopColor, leerB: parseFloat(cs(leer).borderTopWidth), l2 };
+    });
+    gleich(p.leerRand, p.l2, 'Rand leerer Punkte dunkel (--label-2)');
+    wahr(p.leerB >= 1, 'Rand zu dünn');
+    await d.ctx.close();
   });
 
   await pruefe('12 Aktuell-Kachel: „Aktuell hh:mm“ links über dem Symbol in --akzent-2', async () => {

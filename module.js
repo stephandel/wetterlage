@@ -8,7 +8,7 @@
   var RAD = Math.PI / 180;
   var OSM = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   var karten = [];       // gebaute Leaflet-Karten, beim erneuten Zeichnen abgebaut
-  var gebunden = null;   // { el, fn } – Klick-Weiche des Containers
+  var gebunden = null;   // { el, fn, down } – Klick-Weiche des Containers (down: Druckpunkt, um Wischen von Tippen zu trennen)
 
   // ---------- kleine Hilfen ----------
   function p2(n) { return (n < 10 ? '0' : '') + n; }
@@ -51,7 +51,8 @@
     for (i = i0; i < zt.length && werte.length < 8; i++) { werte.push(num(pr[i]) || 0); zeiten.push(zt[i]); }
     var nass = werte.map(function (v) { return v >= 0.1; });
     var wort = opt.schnee ? 'Schnee' : 'Regen';
-    var res = { werte: werte, zeiten: zeiten, nass: nass, schnee: !!opt.schnee, satz: '', stand: stand };
+    var res = { werte: werte, zeiten: zeiten, nass: nass, schnee: !!opt.schnee, satz: '', stand: stand, danach: '' };
+    for (i = i0 + werte.length; i < zt.length; i++) if ((num(pr[i]) || 0) >= 0.1) { res.danach = zt[i]; break; }   // erster Regen nach den 8 Werten
     if (!werte.length) { res.satz = 'Für die nächsten 2 Stunden liegen keine Regendaten vor'; return res; }
     var a = nass.indexOf(true);
     if (a < 0) { res.satz = 'Die nächsten 2 Stunden bleibt es trocken'; return res; }
@@ -71,19 +72,13 @@
   // Balkenhöhe in Prozent: ab 0,1 mm zählt als Regen (mindestens 8 %), volle Höhe bei 1,5 mm
   R.balkenHoehe = function (v) { return v >= 0.1 ? Math.max(8, Math.min(1, v / 1.5) * 100) : 0; };
 
-  // „Trocken bis 19 Uhr“ / „Regen bis 19 Uhr“ aus den Stunden (ab 0,1 mm)
-  R.trockenBis = function (hourly, offset, ms) {
-    var t = hourly && hourly.time, p = hourly && hourly.precipitation;
-    if (!t || !p) return '';
-    var i0 = jetztIdx(t, offset, ms != null ? ms : Date.now()), heute = WL.ortsZeit(offset, ms != null ? ms : Date.now()).datum, i;
-    function nass(k) { return (num(p[k]) || 0) >= 0.1; }
-    if (nass(i0)) {
-      for (i = i0; i + 1 < t.length && nass(i + 1); i++);
-      return 'Regen bis ' + p2((WL.stundeVon(t[i]) + 1) % 24) + ' Uhr';
-    }
-    for (i = i0; i < t.length && !nass(i); i++);
-    if (i >= t.length) return 'Trocken in den nächsten Tagen';
-    return 'Trocken bis ' + (t[i].slice(0, 10) === heute ? '' : WL.wochentag(t[i]) + ' ') + uhr(t[i]);
+  // Zusatzzeile unter den Balken, aus denselben 15-Minuten-Werten wie der Satz: „Trocken bis 16:15 Uhr“.
+  // Nur wenn die nächsten 2 Stunden trocken sind und die Daten danach Regen zeigen; sonst '' (der Satz sagt schon alles, kein Widerspruch möglich)
+  R.trockenBis = function (minutely, offset, ms) {
+    var r = regenSatzRoh(minutely, offset, { ms: ms != null ? ms : Date.now() });
+    if (!r.danach || r.nass.indexOf(true) >= 0 || r.stand) return '';
+    var heute = WL.ortsZeit(offset, ms != null ? ms : Date.now()).datum;
+    return 'Trocken bis ' + (r.danach.slice(0, 10) === heute ? '' : WL.wochentag(r.danach) + ' ') + WL.hhmm(r.danach) + ' Uhr';
   };
 
   // ---------- Rechnen: Stunden ----------
@@ -215,13 +210,18 @@
     var ph = mondPhase(ms), prozent = Math.round(ph.anteil * 100), zunehmend = ph.phase < 0.5;
     var start = WL.isoZuMs(WL.ortsZeit(offset, ms).datum, offset), H0 = 0.133, auf = null, unter = null;
     var prev = mondHoehe(start, lat, lon) - H0;
-    for (var t = 10; t <= 1440; t += 10) {
+    for (var t = 10; t <= 2880; t += 10) {   // 2 Tage: liegt ein Ereignis erst nach Mitternacht, steht es als „morgen“ da
       var cur = mondHoehe(start + t * 60000, lat, lon) - H0;
       if (prev < 0 && cur >= 0 && auf === null) auf = start + (t - 10 + 10 * (0 - prev) / (cur - prev)) * 60000;
       if (prev >= 0 && cur < 0 && unter === null) unter = start + (t - 10 + 10 * (prev - 0) / (prev - cur)) * 60000;
       prev = cur;
     }
+    var morgen0 = start + 864e5, ereignisse = [];
+    if (auf !== null) ereignisse.push({ art: 'Mondaufgang', ms: auf, zeit: zeitAus(auf, offset), morgen: auf >= morgen0 });
+    if (unter !== null) ereignisse.push({ art: 'Monduntergang', ms: unter, zeit: zeitAus(unter, offset), morgen: unter >= morgen0 });
+    ereignisse.sort(function (a, b) { return a.ms - b.ms; });
     return {
+      ereignisse: ereignisse,
       phase: ph.phase, anteil: ph.anteil, prozent: prozent, zunehmend: zunehmend,
       name: phasenName(ph.phase, ph.anteil),
       text: 'Mond zu ' + prozent + ' % beleuchtet' + (prozent <= 3 || prozent >= 97 ? '' : ', ' + (zunehmend ? 'zunehmend' : 'abnehmend')),
@@ -245,7 +245,7 @@
       var den = a - 2 * b + c, dx = den ? 0.5 * (a - c) / den : 0;
       dx = Math.max(-1, Math.min(1, dx));
       var em = WL.isoZuMs(t[i], offset) + dx * 36e5;
-      if (em >= ms) ev.push({ art: art, ms: em });
+      if (em >= ms) ev.push({ art: art, ms: em, morgen: WL.ortsZeit(offset, em).datum > WL.ortsZeit(offset, ms).datum });
     }
     return ev;
   }
@@ -293,7 +293,7 @@
     }
     if (daten.ort && daten.ort.meer === true && daten.meer) {
       var ev = gezeiten(daten.meer, off, ms).sort(function (a, b) { return a.ms - b.ms; }).slice(0, 2);
-      if (ev.length) out.push({ id: 'gezeiten', ikon: 'tropfen', text: ev.map(function (e) { return e.art + ' um ' + zeitAus(e.ms, off) + ' Uhr'; }).join(', ') });
+      if (ev.length) out.push({ id: 'gezeiten', ikon: 'tropfen', text: ev.map(function (e) { return e.art + ' um ' + zeitAus(e.ms, off) + ' Uhr' + (e.morgen ? ' (morgen)' : ''); }).join(', ') });
     }
     out = out.slice(0, 3);
     if (!out.length) out.push({ id: 'nichts', ikon: 'cloudsun', text: 'Heute nichts Besonderes' });
@@ -473,7 +473,7 @@
   }
 
   function modMeteogramm() {
-    return '<section class="kachel k-meteogramm k-klein" aria-labelledby="m-meteogramm-t"><h2 class="kachel-kopf" id="m-meteogramm-t"><button type="button" class="kachel-kopf-knopf tippbar" data-aktion="graphs">Meteogramm</button></h2>' +
+    return '<section class="kachel k-meteogramm k-mittel" aria-labelledby="m-meteogramm-t"><h2 class="kachel-kopf" id="m-meteogramm-t"><button type="button" class="kachel-kopf-knopf tippbar" data-aktion="graphs">Meteogramm</button></h2>' +
       '<div id="start-meteogramm" class="mg"></div>' +
       '<div class="fussleiste"><button type="button" class="chip tippbar" data-aktion="graphs">Graphs öffnen' + ikon('chevron', 'ikon-klein') + '</button></div></section>';
   }
@@ -491,10 +491,11 @@
         '<div class="t-temp"><span class="tmax"><span class="sr-only">Höchstwert </span>' + esc(WL.temp(d.temperature_2m_max[i], einh)) + '</span><span class="tmin"><span class="sr-only">Tiefstwert </span>' + esc(WL.temp(d.temperature_2m_min[i], einh)) + '</span></div>' +
         '<div class="t-sr"><span class="zeile">' + ikon('sun', 'ikon-klein') + '<span class="sr-only">Sonne </span>' + zahlEinheit(zahlDe(sonne === null ? null : sonne / 3600, 1), 'h') + '</span>' +
         '<span class="zeile">' + ikon('tropfen', 'ikon-klein') + '<span class="sr-only">Regen </span>' + zahlEinheit(zahlDe(mm, 1), 'mm') + (pop === null ? '' : ' <span class="pop">· ' + Math.round(pop) + ' %</span>') + '</span></div>' +
-        '<div class="t-luft">' + (s.stufe ? ring(a) + '<span class="luft-wort">' + esc(s.wort) + '</span><span class="sr-only">Luftqualität</span>' : '<span class="leer-strich" aria-label="Keine Luftdaten">–</span>') + '</div>' +
+        '<div class="t-luft">' + (s.stufe ? ring(a) + '<span class="luft-wort">' + esc(s.wort) + '</span><span class="sr-only">Luftqualität</span>' : '') + '</div>' +
         '<div class="t-wind"><span class="sr-only">Wind bis </span><span class="nowrap">' + windTeile(d.wind_speed_10m_max[i], einh) + '</span><span class="richtung">' + esc(WL.windRichtung(d.wind_direction_10m_dominant && d.wind_direction_10m_dominant[i])) + '</span></div></div>';
     }).join('');
-    return kachel('k-tage k-gross', 'm-tage', 'Vorhersage ' + d.time.length + ' Tage', '<div class="liste tage">' + rows + '</div>');
+    var nLuft = d.time.filter(function (x) { return aqi[x] !== undefined; }).length;   // Luftdaten reichen nur wenige Tage; Rest der Spalte bleibt leer
+    return kachel('k-tage k-gross', 'm-tage', 'Vorhersage ' + d.time.length + ' Tage', '<div class="liste tage">' + rows + '</div>' + (nLuft && nLuft < d.time.length ? '<p class="fuss fuss-tage">Luftwerte ' + nLuft + ' Tage</p>' : ''));
   }
 
   function modLuft(daten) {
@@ -522,16 +523,16 @@
     var auf = d.sunrise[di], unter = d.sunset[di];
     if (!auf || !unter) return kachel('k-sonne k-gross', 'm-sonne', 'Sonne', ruhig('Zurzeit keine Sonnenzeiten für diesen Ort'));
     var a = WL.isoZuMs(auf, off), u = WL.isoZuMs(unter, off), fa = (ms - a) / (u - a);
-    var fc = Math.max(-0.12, Math.min(1.12, fa));
+    var fc = Math.max(0, Math.min(1, fa));   // außerhalb des Tages sitzt die Sonne am Horizont
     var x = 120 - 100 * Math.cos(Math.PI * fc), y = 80 - 60 * Math.sin(Math.PI * fc);
     var satz;
     if (fa >= 0 && fa <= 1) satz = 'Noch ' + WL.minutenAlsText((u - ms) / 60000) + ' Tageslicht';
     else if (fa < 0) satz = 'Die Sonne geht heute um ' + WL.hhmm(auf) + ' Uhr auf';
     else satz = 'Die Sonne ist untergegangen' + (d.sunrise[di + 1] ? ', morgen geht sie um ' + WL.hhmm(d.sunrise[di + 1]) + ' Uhr auf' : '');
-    var svg = '<svg class="bogen" viewBox="0 0 240 110" role="img" aria-label="' + esc(satz) + '"><line class="horizont" x1="8" y1="80" x2="232" y2="80"/>' +
+    var svg = '<svg class="bogen" viewBox="0 10 240 82" role="img" aria-label="' + esc(satz) + '"><line class="horizont" x1="8" y1="80" x2="232" y2="80"/>' +
       '<path class="bogen-bahn" d="M20 80A100 60 0 0 1 220 80" pathLength="100"/>' +
       (fa > 0 ? '<path class="bogen-tag" d="M20 80A100 60 0 0 1 220 80" pathLength="100" style="stroke-dasharray:' + (Math.min(fa, 1) * 100).toFixed(1) + ' 100"/>' : '') +
-      '<circle class="sonne-punkt" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="8"/></svg>';
+      '<circle class="sonne-punkt' + (fa >= 0 && fa <= 1 ? '' : ' nacht') + '" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="8"/></svg>';
     return kachel('k-sonne k-gross', 'm-sonne', 'Sonne',
       svg + '<div class="sonne-zeiten"><p>' + ikon('sunrise') + '<span><span class="klein">Aufgang</span><b class="zahl">' + esc(WL.hhmm(auf)) + ' Uhr</b></span></p>' +
       '<p>' + ikon('sunset') + '<span><span class="klein">Untergang</span><b class="zahl">' + esc(WL.hhmm(unter)) + ' Uhr</b></span></p></div>' +
@@ -547,10 +548,12 @@
   }
   function modMond(daten) {
     var off = offsetVon(daten), o = daten.ort, m = R.mond(jetztMs(daten), o.lat, o.lon, off);
+    // früheres Ereignis zuerst; fehlt eines in den nächsten 2 Tagen, steht „keiner“ dahinter
+    var ereignisse = m.ereignisse.map(function (e) { return '<div><dt>' + e.art + '</dt><dd>' + zahlEinheit(e.zeit, 'Uhr') + (e.morgen ? ' <span class="einheit">morgen</span>' : '') + '</dd></div>'; }).join('');
+    if (m.ereignisse.length < 2) ereignisse += '<div><dt>' + (m.aufgang === null ? 'Mondaufgang' : 'Monduntergang') + '</dt><dd>keiner</dd></div>';
     return kachel('k-mond k-gross', 'm-mond', 'Mond',
       '<div class="mond-kopf">' + mondSvg(m.anteil, m.phase) + '<div><p class="mond-name">' + esc(m.name) + '</p><p class="deutung">' + esc(m.text) + '</p></div></div>' +
-      '<dl class="werte werte-quer"><div><dt>Mondaufgang</dt><dd>' + (m.aufgang ? zahlEinheit(m.aufgang, 'Uhr') : 'heute keiner') + '</dd></div>' +
-      '<div><dt>Monduntergang</dt><dd>' + (m.untergang ? zahlEinheit(m.untergang, 'Uhr') : 'heute keiner') + '</dd></div></dl>' +
+      '<dl class="werte werte-quer">' + ereignisse + '</dl>' +
       '<ul class="phasen">' + m.naechste.map(function (x) { return '<li><span>' + esc(x.name) + '</span><b class="zahl">' + esc(x.text) + '</b></li>'; }).join('') + '</ul>');
   }
 
@@ -558,7 +561,7 @@
     var f = daten.forecast, c = f.current || {}, h = f.hourly, off = offsetVon(daten), einh = daten.einheiten, ms = jetztMs(daten);
     var bf = WL.beaufort(c.wind_speed_10m), i0 = jetztIdx(h.time, off, ms), zellen = '';
     for (var i = i0; i < Math.min(h.time.length, i0 + 18); i++) {
-      zellen += '<li><span class="klein">' + p2(WL.stundeVon(h.time[i])) + ' Uhr</span>' + roseKlein(h.wind_direction_10m[i], 'rose-mini') + '<b class="zahl">' + esc(zahlDe(WL.windWert(h.wind_speed_10m[i], einh), 0)) + '</b>' +
+      zellen += '<li><span class="klein">' + p2(WL.stundeVon(h.time[i])) + ' Uhr</span>' + '<span class="w-zeile">' + roseKlein(h.wind_direction_10m[i], 'rose-mini') + '<b class="zahl">' + esc(zahlDe(WL.windWert(h.wind_speed_10m[i], einh), 0)) + '</b></span>' +
         '<span class="sr-only">' + esc(WL.windRichtungWort(h.wind_direction_10m[i])) + '</span></li>';
     }
     return kachel('k-wind k-gross', 'm-wind', 'Wind',
@@ -577,6 +580,7 @@
       var cls = rs.nass[i] ? 'regen' : 'trocken', hoehe = R.balkenHoehe(v);
       return '<span class="balken ' + cls + '" style="--hoehe:' + hoehe.toFixed(0) + '%"><i></i></span>';
     }).join('');
+    var trocken = R.trockenBis(f.minutely_15, off, ms);
     var achse = rs.stand ? '<span>' + esc(rs.stand) + '</span><span>+1 h</span><span>+2 h</span>' : '<span>Jetzt</span><span>+1 h</span><span>+2 h</span>';
     var karte;
     if (daten.offline) karte = ruhig('Offline: Radar nicht verfügbar');
@@ -590,10 +594,10 @@
     }
     return kachel('k-radar k-gross', 'm-radar', 'Regenradar',
       '<p class="regen-satz">' + esc(rs.satz) + '</p>' +
-      '<div class="balken-feld" role="img" aria-label="' + esc(rs.satz + (rs.stand ? ' (Stand ' + rs.stand + ', Balken je 15 Minuten ab dann)' : '')) + '"><div class="balken-reihe">' + balken + '</div><div class="balken-achse" aria-hidden="true">' + achse + '</div></div>' +
+      '<div class="balken-feld" role="img" aria-label="' + esc(rs.satz + (rs.stand ? ' (Stand ' + rs.stand + ', Balken je 15 Minuten ab dann)' : '')) + '"><div class="balken-reihe' + (rs.nass.indexOf(true) < 0 ? ' trocken-ganz' : '') + '">' + balken + '</div><div class="balken-achse" aria-hidden="true">' + achse + '</div></div>' +
       karte +
       '<ul class="legende"><li><i class="leicht"></i>leicht</li><li><i class="maessig"></i>mäßig</li><li><i class="stark"></i>stark</li></ul>' +
-      '<div class="radar-fuss"><p class="trocken">' + esc(R.trockenBis(f.hourly, off, ms)) + '</p><button type="button" class="chip tippbar" data-aktion="radsat">Karte öffnen' + ikon('chevron', 'ikon-klein') + '</button></div>');
+      '<div class="radar-fuss">' + (trocken ? '<p class="trocken">' + esc(trocken) + '</p>' : '') + '<button type="button" class="chip tippbar" data-aktion="radsat">Karte öffnen' + ikon('chevron', 'ikon-klein') + '</button></div>');
   }
 
   function modPollen(daten) {
@@ -603,8 +607,8 @@
     var zeilen = WL.POLLEN.map(function (p) {
       var v = num(l[p[0]]), s = WL.pollenStufe(v, p[0].replace('_pollen', ''));
       if (v !== null) gesehen = true;
-      var voll = s.stufe === 3 ? 4 : (s.stufe || 0), dots = '';
-      for (var i = 0; i < 4; i++) dots += '<i class="' + (i < voll ? 'an' : '') + '"></i>';
+      var voll = s.stufe || 0, dots = '';   // gering 1, mäßig 2, stark 3 Punkte
+      for (var i = 0; i < 3; i++) dots += '<i class="' + (i < voll ? 'an' : '') + '"></i>';
       return '<li><span class="p-name">' + esc(p[1]) + '</span><span class="punkte-reihe" aria-hidden="true">' + dots + '</span><span class="p-wort' + (v === null ? ' still' : '') + '">' + esc(s.wort) + '</span></li>';
     }).join('');
     if (!gesehen) return kachel('k-pollen k-gross', 'm-pollen', 'Pollen', ruhig('Zurzeit keine Pollendaten für diesen Ort'));
@@ -645,9 +649,17 @@
   M.WEG_SCHLUESSEL = WEG_SCHLUESSEL;
 
   function bind(container, daten, ctx) {
-    if (gebunden) gebunden.el.removeEventListener('click', gebunden.fn);
+    if (gebunden) { gebunden.el.removeEventListener('click', gebunden.fn); if (gebunden.down) gebunden.el.removeEventListener('pointerdown', gebunden.down, true); }
+    var druck = null;
+    var down = function (ev) { druck = { x: ev.clientX, y: ev.clientY }; };
     var fn = function (ev) {
-      var b = ev.target.closest && ev.target.closest('[data-aktion]'); if (!b || !container.contains(b)) return;
+      var b = ev.target.closest && ev.target.closest('[data-aktion]');
+      if (!b) {   // Tipp auf das Diagramm der Meteogramm-Kachel öffnet Graphs; nach einer Wischbewegung (mehr als 8 px) nicht
+        var mg = ev.target.closest && ev.target.closest('.k-meteogramm');
+        if (mg && container.contains(mg) && !(druck && Math.abs(ev.clientX - druck.x) + Math.abs(ev.clientY - druck.y) > 8)) ctx.oeffneReiter('graphs');
+        return;
+      }
+      if (!container.contains(b)) return;
       var a = b.getAttribute('data-aktion');
       if (a === 'graphs') ctx.oeffneReiter('graphs');
       else if (a === 'radsat') ctx.oeffneReiter('radsat');
@@ -671,8 +683,9 @@
         if (zuRadar) kartenStarten(container, daten);
       }
     };
+    container.addEventListener('pointerdown', down, true);
     container.addEventListener('click', fn);
-    gebunden = { el: container, fn: fn };
+    gebunden = { el: container, fn: fn, down: down };
   }
 
   M.rendern = function (container, daten, ctx) {
@@ -702,7 +715,7 @@
     container.innerHTML =
       k('k-aktuell k-gross', '<span class="skel skel-kopf"></span><div class="aktuell"><div class="aktuell-links">' + z(1, 'skel-sym') + z(1, 'skel-hero') + '</div><div class="aktuell-rechts">' + z(6, 'skel-zeile') + '</div></div>') +
       k('k-stunden k-mittel', '<span class="skel skel-kopf"></span><div class="stunden">' + z(3, 'skel-spalte') + '</div>') +
-      k('k-meteogramm k-klein', '<span class="skel skel-kopf"></span>' + z(1, 'skel-block')) +
+      k('k-meteogramm k-mittel', '<span class="skel skel-kopf"></span>' + z(1, 'skel-block')) +
       k('k-tage k-gross', '<span class="skel skel-kopf"></span>' + z(8, 'skel-reihe')) +
       k('k-luft k-mittel', '<span class="skel skel-kopf"></span>' + z(1, 'skel-block') + z(2, 'skel-zeile')) +
       k('k-tipps k-gross', '<span class="skel skel-kopf"></span>' + z(3, 'skel-zeile')) +
@@ -717,7 +730,7 @@
     kartenAbbauen();
     container.removeAttribute('aria-busy');
     container.innerHTML = '<section class="kachel k-fehler" role="status"><span class="fehler-ikon">' + ikon('cloud') + '</span><p>' + esc(satz) + '</p><button type="button" class="button tippbar" data-aktion="nochmal">Erneut versuchen</button></section>';
-    if (gebunden) gebunden.el.removeEventListener('click', gebunden.fn);
+    if (gebunden) { gebunden.el.removeEventListener('click', gebunden.fn); if (gebunden.down) gebunden.el.removeEventListener('pointerdown', gebunden.down, true); }
     var fn = function (ev) { if (ev.target.closest && ev.target.closest('[data-aktion="nochmal"]') && typeof nochmal === 'function') nochmal(); };
     container.addEventListener('click', fn);
     gebunden = { el: container, fn: fn };

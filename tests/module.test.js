@@ -153,7 +153,7 @@ test('Sterne: klare Nacht, Zeit = Sonnenuntergang + 60 min', () => {
 });
 test('Küsten-Tipp nur mit meer:true', () => {
   const t = rechnen.tipps(daten({ meer: true, marine: marine() })).find((x) => x.id === 'gezeiten');
-  assert.ok(t && /^(Flut|Ebbe) um \d\d:\d\d Uhr, (Flut|Ebbe) um \d\d:\d\d Uhr$/.test(t.text), 'Text: ' + (t && t.text));
+  assert.ok(t && /^(Flut|Ebbe) um \d\d:\d\d Uhr( \(morgen\))?, (Flut|Ebbe) um \d\d:\d\d Uhr( \(morgen\))?$/.test(t.text), 'Text: ' + (t && t.text));
   assert.ok(!tippIds(daten({ meer: false, marine: marine() })).includes('gezeiten'));
   assert.ok(!tippIds(daten({ meer: null, marine: marine() })).includes('gezeiten'));
   assert.ok(!tippIds(daten({ meer: true, marine: null })).includes('gezeiten'));
@@ -248,11 +248,6 @@ test('Pollen morgen: stärkste Art', () => {
   const leer = { hourly: { time: t, alder_pollen: [0, 0, 0], birch_pollen: [0, 0, 0], grass_pollen: [0, 0, 0], mugwort_pollen: [0, 0, 0], olive_pollen: [0, 0, 0], ragweed_pollen: [0, 0, 0] } };
   assert.strictEqual(rechnen.pollenMorgen(leer, OFF, J).satz, 'Morgen kaum Pollen');
 });
-test('Trocken bis / Regen bis', () => {
-  assert.strictEqual(rechnen.trockenBis(daten({ stunde: [[23, 19, 'precipitation', 0.6]] }).forecast.hourly, OFF, J), 'Trocken bis 19 Uhr');
-  assert.strictEqual(rechnen.trockenBis(daten({ stunde: [[23, 14, 'precipitation', 0.6], [23, 15, 'precipitation', 0.3]] }).forecast.hourly, OFF, J), 'Regen bis 16 Uhr');
-});
-
 // ---------- Zeichnen (Smoke-Test ohne Browser) ----------
 console.log('rendern');
 function containerStub() { return { innerHTML: '', setAttribute() { }, removeAttribute() { }, addEventListener() { }, removeEventListener() { }, querySelector() { return null; }, querySelectorAll() { return []; }, contains() { return true; } }; }
@@ -309,6 +304,83 @@ test('Ersatzkachel eines fehlgeschlagenen Moduls hat Überschrift und aria-label
 test('Skeleton und Fehlerzustand', () => {
   const c = containerStub(); Module.skeleton(c); assert.ok(c.innerHTML.includes('skel') && !/spinner|kreisel/i.test(c.innerHTML));
   Module.fehler(c, 'Keine Verbindung.', () => { }); assert.ok(c.innerHTML.includes('Erneut versuchen') && c.innerHTML.includes('Keine Verbindung.'));
+});
+
+// ---------- Korrekturlauf 3, Paket C1 ----------
+console.log('korrekturlauf 3 C1');
+test('Trocken bis: aus den 15-Minuten-Werten, nur wenn der Satz trocken ist und danach Regen kommt', () => {
+  const m = (w) => mini(w);   // 14:00 + n · 15 min, 12 Werte
+  assert.strictEqual(rechnen.trockenBis(m([0, 0, 0, 0, 0, 0, 0, 0, 0, 0.6, 0, 0]), OFF, J), 'Trocken bis 16:15 Uhr');
+  assert.strictEqual(rechnen.trockenBis(m([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), OFF, J), '', 'ganz trocken: der Satz genügt');
+  assert.strictEqual(rechnen.trockenBis(m([0, 0, 0, 0, 0, 0, 0, 0.6, 0, 0, 0, 0]), OFF, J), '', 'Regen im Satz: keine zweite Zeile');
+  assert.strictEqual(rechnen.trockenBis(m([0.5, 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), OFF, J), '', 'regnet jetzt: keine zweite Zeile');
+  assert.strictEqual(rechnen.trockenBis(null, OFF, J), '');
+});
+test('Radar-Kachel: Satz und Zeile widersprechen sich nie (Regen ab +1 h 45 min, Stundenwert zeigt rückwirkend Regen)', () => {
+  const d = volleDaten();
+  d.forecast.minutely_15 = mini([0, 0, 0, 0, 0, 0, 0, 0.6, 0.6, 0, 0, 0]);   // 14:00 … ; Regen ab 15:45
+  d.forecast.hourly.precipitation = d.forecast.hourly.precipitation.slice(); d.forecast.hourly.precipitation[(23 - 23) * 24 + 14] = 0.8;   // Stundenwert 14 Uhr (gilt rückwirkend)
+  const c = containerStub(); Module.rendern(c, d, {});
+  const h = c.innerHTML.slice(c.innerHTML.indexOf('k-radar'));
+  assert.ok(h.includes('Regen ab 15:45 Uhr'), 'Satz fehlt: ' + h.slice(0, 300));
+  assert.ok(!/Trocken bis|Regen bis/.test(h), 'Zeile widerspricht oder wiederholt den Satz: ' + (h.match(/(Trocken|Regen) bis[^<]*/) || [''])[0]);
+  const d2 = volleDaten(); d2.forecast.minutely_15 = mini([0, 0, 0, 0, 0, 0, 0, 0, 0, 0.6, 0, 0]);
+  const c2 = containerStub(); Module.rendern(c2, d2, {});
+  assert.ok(c2.innerHTML.includes('Die nächsten 2 Stunden bleibt es trocken') && c2.innerHTML.includes('Trocken bis 16:15 Uhr'), 'trockener Satz mit späterem Regen');
+});
+test('Luft-Ampel (Europäischer Index): Gut ≤ 40, Mäßig ≤ 80, Schlecht > 80', () => {
+  [[0, 1, 'Gut'], [21, 1, 'Gut'], [40, 1, 'Gut'], [41, 2, 'Mäßig'], [80, 2, 'Mäßig'], [81, 3, 'Schlecht'], [150, 3, 'Schlecht']].forEach(([a, st, w]) => { const r = WL.luftStufe(a); assert.strictEqual(r.stufe, st, a + ' Stufe'); assert.strictEqual(r.wort, w, a + ' Wort'); });
+  assert.strictEqual(WL.luftStufe(30).farbe, 'var(--gruen)'); assert.strictEqual(WL.luftStufe(60).farbe, 'var(--orange)'); assert.strictEqual(WL.luftStufe(100).farbe, 'var(--rot)');
+  assert.strictEqual(WL.luftStufe(null).stufe, 0);
+  const c = containerStub(); Module.rendern(c, volleDaten(), {});   // Fixtur: Index 34
+  const luft = c.innerHTML.slice(c.innerHTML.indexOf('class="kachel k-luft'), c.innerHTML.indexOf('class="kachel k-tipps'));
+  assert.ok(luft.includes('luft-wort-gross">Gut<') && luft.includes('Gute Luft zum Lüften'), 'Index 34 ist „Gut“');
+});
+test('Tagesliste: Luft ab Tag 6 leer (kein „–“), Fußnote „Luftwerte 5 Tage“', () => {
+  const c = containerStub(); Module.rendern(c, volleDaten(), {});
+  const h = c.innerHTML, tage = h.slice(h.indexOf('class="kachel k-tage'), h.indexOf('class="kachel k-luft'));
+  const zellen = tage.match(/<div class="t-luft">.*?<\/div>/g) || [];
+  assert.strictEqual(zellen.length, 8, 'acht Luft-Zellen');
+  assert.strictEqual(zellen.filter((z) => z === '<div class="t-luft"></div>').length, 3, 'Tag 6 bis 8 leer: ' + zellen.slice(5).join(' '));
+  assert.ok(!tage.includes('leer-strich') && !/>–</.test(zellen.join('')), 'kein „–“ in der Luft-Spalte');
+  assert.ok(/<p class="fuss[^"]*">Luftwerte 5 Tage<\/p>/.test(tage), 'Fußnote fehlt');
+  const d = volleDaten(); d.luft = null; const c2 = containerStub(); Module.rendern(c2, d, {});
+  assert.ok(!c2.innerHTML.includes('Luftwerte'), 'ohne Luftdaten keine Fußnote');
+});
+test('Mond: Auf- und Untergang nach Uhrzeit sortiert, „morgen“ gekennzeichnet', () => {
+  let frueherUnter = null, morgenFall = null;
+  for (let t = 0; t < 60; t++) {
+    const ms = lokal(12, 0, 23) + t * 864e5, m = rechnen.mond(ms, 49.4875, 8.466, OFF);
+    assert.ok(Array.isArray(m.ereignisse), 'ereignisse fehlt');
+    const tag0 = WL.isoZuMs(WL.ortsZeit(OFF, ms).datum, OFF);
+    for (let i = 0; i < m.ereignisse.length; i++) {
+      if (i) assert.ok(m.ereignisse[i - 1].ms <= m.ereignisse[i].ms, 'nicht sortiert');
+      assert.strictEqual(m.ereignisse[i].morgen, m.ereignisse[i].ms >= tag0 + 864e5, 'morgen-Kennzeichen');
+    }
+    if (m.ereignisse.length > 1 && m.ereignisse[0].art === 'Monduntergang' && !frueherUnter) frueherUnter = ms;
+    if (m.ereignisse.some((e) => e.morgen) && !morgenFall) morgenFall = ms;
+  }
+  assert.ok(frueherUnter, 'kein Tag mit Untergang vor Aufgang gefunden');
+  assert.ok(morgenFall, 'kein Tag mit einem Ereignis erst morgen gefunden');
+  const ohneMond = (ms) => { const d = daten({ jetzt: ms }); const c = containerStub(); Module.rendern(c, d, {}); const h = c.innerHTML; return h.slice(h.indexOf('class="kachel k-mond'), h.indexOf('class="kachel k-wind')); };
+  const a = ohneMond(frueherUnter);
+  assert.ok(a.indexOf('Monduntergang') < a.indexOf('Mondaufgang'), 'früheres Ereignis zuerst');
+  assert.ok(/>morgen</.test(ohneMond(morgenFall)), '„morgen“ im HTML');
+});
+test('Pollen: Punkte 1/2/3 für gering/mäßig/stark (drei Punkte je Zeile)', () => {
+  const html = (wert) => { const d = volleDaten(); d.luft.current.grass_pollen = wert; const c = containerStub(); Module.rendern(c, d, {}); const h = c.innerHTML; const z = h.slice(h.indexOf('>Gräser<'), h.indexOf('>Beifuß<')); return z; };
+  [[10, 1, 'gering'], [25, 2, 'mäßig'], [100, 3, 'stark']].forEach(([w, an, wort]) => {
+    const z = html(w), pk = z.match(/<i class="(an)?"><\/i>/g) || [];
+    assert.strictEqual(pk.length, 3, 'drei Punkte: ' + z); assert.strictEqual(pk.filter((x) => /an/.test(x)).length, an, wort);
+    assert.ok(z.includes('>' + wort + '<'));
+  });
+});
+test('Küsten-Tipp: Gezeiten nach Mitternacht Ortszeit tragen „(morgen)“', () => {
+  const v = T.map((t, i) => 1.5 * Math.sin(2 * Math.PI * (i - 24.25 + 3.105) / 12.42)), m = { hourly: { time: T, sea_level_height_msl: v } };
+  const t = rechnen.tipps(daten({ meer: true, marine: m })).find((x) => x.id === 'gezeiten');
+  assert.ok(/Flut um 00:\d\d Uhr \(morgen\)/.test(t.text), t.text);
+  assert.ok(!/^(Flut|Ebbe) um \d\d:\d\d Uhr \(morgen\)/.test(t.text), 'das heutige Ereignis trägt kein „morgen“: ' + t.text);
+  assert.ok(/^(Ebbe|Flut) um 1[4-9]:\d\d Uhr, /.test(t.text), t.text);
 });
 
 // ---------- Warnung: Auswahl, Weg-Liste, Texte ----------
