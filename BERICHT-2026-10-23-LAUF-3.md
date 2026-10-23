@@ -208,3 +208,14 @@ Fehlalarm verworfen: Eine „zweite Blatt-Ebene“ bei „immer im Vollbild“ l
 - **Warnung Stufe 3/4:** Die Fehlerliste empfahl, sie nicht ausblendbar zu machen. Der Auftrag nannte keine Ausnahme, darum sind alle Stufen ausblendbar. Eine neue Warnung (andere id) erscheint wieder. Bitte bei Bedarf entscheiden.
 - `FEHLERLISTE-2026-10-23.md` ist noch nicht im Git (nicht von mir angelegt, nicht hinzugefügt).
 - **Hochladen:** nur mit Stephans Okay. Danach den Service Worker auf GitHub Pages prüfen (Build 5).
+
+## Endkontrolle der Leitung (Fable), 23.10. ab 16:10
+
+- Selbst ausgeführt: `npm test` 43/43 grün, `node tests/module.test.js` 74/74, `node tools/kontrast.js` grün.
+- Bausteine gegen den ersten Upload (`5c1b0fe`) verglichen: 0 geänderte Zeilen in meteogramm.js/.css, bausteine-einbau.js, lib/, tokens.css, base.css, symbole.js, ikonen.js, DESIGN.md, manifest.json.
+- 60 der 124 Fotos als Bildbögen angesehen (Startseite hell/dunkel komplett, alle Reiter, Warnung in allen Zuständen, Vollbild und zurück, Offline, Corralejo, Ortssuche, Schrift 150 %, Querformat). Keine Abweichung zum Bericht gefunden.
+- Drei Kleinigkeiten, nicht behoben (Runde 4):
+  - Der Warn-Einzeiler bricht bei 390 px in zwei Zeilen („bis Sa. 04:00“ rutscht nach unten).
+  - In der Aktuell-Kachel steht „Böen“ und „49 km/h“ zweizeilig.
+  - Querformat im Reiter Graphs (ohne Vollbild): nur eine Diagrammzeile sichtbar, Vollbild ist dort der Weg.
+- Hochgeladen mit Stephans Freigabe von 16:00 („Lade gleich hoch ohne mein ok“): `git push origin main`, Commits `a31b1c8` bis `eb4d05c`.
