@@ -718,6 +718,33 @@ function wahr(b, was) { if (!b) throw new Error(was); }
     await ctx.close();
   });
 
+  await pruefe('20 Karte im Reiter (Vollbild aus): Leaflet-Ebenen liegen weder über der Kopfleiste noch über dem Orte-Blatt', async () => {
+    const { ctx, page, st } = await mockSeite(browser);
+    // Wächter: echte Bildkacheln statt 1×1 px. Der Zeichenfehler selbst trat nur live auf (vermutlich durch die Temperaturfläche aus Live-Gitterdaten, die hier fehlen); belegt im Korrekturlauf 3 per Live-Skript
+    await ctx.route((url) => /tile\.|tilecache\./.test(url.hostname), (r) => r.fulfill({ status: 200, contentType: 'image/png', headers: CORS, body: fs.readFileSync(path.join(WURZEL, 'apple-touch-icon.png')) }));
+    for (const tab of ['karten', 'radsat']) {
+      await page.tap('#tab-' + tab); await page.waitForTimeout(1500);
+      // Kopfleiste: Mittelpunkt des Ortsnamens muss die Kopfleiste treffen, auch wenn die Karte darunter durchgescrollt ist
+      await page.evaluate(() => window.scrollTo(0, 120)); await page.waitForTimeout(300);
+      const kopf = await page.evaluate(() => { const k = document.getElementById('kopf-ort').getBoundingClientRect(), t = document.elementFromPoint(k.left + k.width / 2, k.top + k.height / 2); return !!(t && t.closest('#kopf')); });
+      wahr(kopf, tab + ': Karte liegt über der Kopfleiste');
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.tap('#knopf-orte'); await page.waitForTimeout(500);
+      const blatt = await page.evaluate(() => { const r = document.getElementById('orte-fertig').getBoundingClientRect(), t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2), s = document.getElementById('orte-suche').getBoundingClientRect(), u = document.elementFromPoint(s.left + s.width / 2, s.top + s.height / 2); return [!!(t && t.id === 'orte-fertig'), !!(u && u.id === 'orte-suche')]; });
+      gleich(blatt, [true, true], tab + ': Fertig und Suchfeld des Orte-Blatts frei');
+      // WebKit trifft beim Tippen das Blatt, zeichnete live aber die Kartenebenen darüber: darum zusätzlich die Pixel prüfen (freie Blattfläche neben „Mein Standort“)
+      await page.waitForTimeout(500);
+      const ziel = await page.evaluate(() => { const s = document.getElementById('orte-standort').getBoundingClientRect(); const c = getComputedStyle(document.getElementById('orte-blatt')).backgroundColor; return { x: Math.round(s.right + 40), y: Math.round(s.top + s.height / 2), c }; });
+      const bild = await page.screenshot({ clip: { x: ziel.x, y: ziel.y, width: 1, height: 1 } });
+      const px = await page.evaluate(async (b64) => { const i = new Image(); i.src = 'data:image/png;base64,' + b64; await i.decode(); const cv = document.createElement('canvas'); cv.width = i.width; cv.height = i.height; const g = cv.getContext('2d'); g.drawImage(i, 0, 0); return Array.from(g.getImageData(0, 0, 1, 1).data.slice(0, 3)); }, bild.toString('base64'));
+      const soll = ziel.c.match(/[\d.]+/g).slice(0, 3).map(Number).map((v) => (v <= 1 && /color\(/.test(ziel.c) ? Math.round(v * 255) : Math.round(v)));
+      wahr(px.every((v, i) => Math.abs(v - soll[i]) <= 12), tab + ': unter dem Suchfeld ist nicht die Blattfarbe zu sehen (Karte darüber?) – Pixel ' + px.join(',') + ', Blatt ' + soll.join(','));
+      await page.tap('#orte-fertig'); await page.waitForTimeout(400);
+    }
+    gleich(st.fehler, [], 'pageerror');
+    await ctx.close();
+  });
+
   await browser.close();
   srv.close();
   const schlecht = ergebnisse.filter((e) => !e[1]).length;

@@ -212,6 +212,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible, a:focus-vis
 .ort-name small { font-size: var(--fs-footnote); color: var(--nebentext); }
 .ort-name span { overflow-wrap: anywhere; }
 body.blatt-offen { overflow: hidden; }
+/* WebKit zeichnet die Leaflet-Ebenen der eingebetteten Karte über ein offenes Blatt (Tippen trifft das Blatt, sichtbar ist die Karte); das Blatt deckt alles, darum Karte solange verbergen */
+body.blatt-offen #karte { visibility: hidden; }
 .ort-name[aria-current="true"] span:first-child { font-weight: 700; }
 .ort-haken { color: var(--akzent); display: inline-flex; flex: none; }
 .ort-haken svg { inline-size: var(--ikon-groesse); block-size: var(--ikon-groesse); }
