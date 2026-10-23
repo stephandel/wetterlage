@@ -116,7 +116,7 @@
   // ---------- Kopfzeile ----------
   function kopfOrt() { $('kopf-ort').textContent = z.ort ? z.ort.name : 'Wetterlage'; }
   function kopfStand(text) { $('kopf-stand').textContent = text; }
-  // UTC-Abstand des Orts jetzt (Zeitzone der Antwort, damit die Zeitumstellung stimmt; ersatzweise der Wert des Abrufs)
+  // UTC-Abstand des Orts zum Zeitpunkt ms (Zeitzone der Antwort, damit die Zeitumstellung stimmt; ersatzweise der Wert des Abrufs). Nur für echte Zeitpunkte, nicht für die Zeitstrings der Antwort
   function ortOffset(d, ms) { return d && d.forecast ? WL.ortsOffset(d.forecast, ms) : 0; }
   // Liegt der Ort in einer anderen Zeitzone als das Gerät, heißt die Zeit „Ortszeit“
   function andereZeit(d) { return ortOffset(d, d.stand) !== -new Date(d.stand).getTimezoneOffset() * 60; }
@@ -135,7 +135,7 @@
 
   // ---------- Warnung: ⚠️ in der Kopfleiste ----------
   // Weg-Liste (localStorage, [{ id, expires }]) pflegt app.js; module.js liest sie beim Zeichnen und meldet das Wegklicken über ctx.warnungWeg
-  function wegLesen() { return Module.rechnen.wegAufraeumen(WL.merk(Module.WEG_SCHLUESSEL), Date.now()); }
+  function wegLesen() { return Module.rechnen.wegLaden(Date.now()); }
   function warnAnsage(text) { var a = $('warn-ansage'); a.textContent = ''; setTimeout(function () { a.textContent = text; }, 50); }
   function warnKnopfZeigen() {
     var b = $('knopf-warnung'), d = z.obj, kopf = $('kopf');
@@ -143,7 +143,7 @@
     var zeigen = !!(a && !a.zeigen && a.erste);
     var warSichtbar = !b.hidden;
     if (zeigen) {
-      var w = a.erste, off = ortOffset(d, Date.now()), kurz = Module.rechnen.warnKurz(w, off).split(' · ');
+      var w = a.erste, kurz = Module.rechnen.warnKurz(w, Module.zeitOffsetFn(d)).split(' · ');
       var stufe = kurz[0].replace(/^Stufe (\d) von 4$/, '$1');
       b.innerHTML = Module.warnSymbol();
       b.setAttribute('data-stufe', stufe);
@@ -412,11 +412,9 @@
 
   function rendere(d, offline) {
     var ort = z.ort;
-    // Zeitumstellung: auch Daten aus dem Zwischenspeicher bekommen den UTC-Abstand von jetzt (die Stundenwerte sind Ortszeit und bleiben stehen)
-    var fc = Object.assign({}, d.forecast, { utc_offset_seconds: ortOffset(d, Date.now()) });
     var obj = {
       ort: { id: ort.id, name: ort.name, lat: ort.lat, lon: ort.lon, meer: !!ort.meer },
-      forecast: fc, luft: d.luft || null, warnungen: d.warnungen || null, radar: d.radar || null, meer: d.meer || null,
+      forecast: d.forecast, luft: d.luft || null, warnungen: d.warnungen || null, radar: d.radar || null, meer: d.meer || null,
       stand: d.stand, offline: offline === undefined ? !!d.offline : !!offline, einheiten: z.einheiten
     };
     var hatteDaten = !!z.aktuell;

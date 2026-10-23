@@ -15,6 +15,8 @@
   --schalter-knauf: 27px;
   --tabbar-unten: max(var(--s2), var(--safe-bottom));
   --tabbar-breite: 480px;
+  --kopf-quer: 40px;   /* Kopfleiste im Querformat */
+  --karte-min: 200px;
   /* Kopf- und Tab-Leiste ~85 % deckend. Bewusste Abweichung von Regel 22 (61 %) auf Wunsch von Stephan (Nr. 6/31):
      --bg-2 zu 85 % gegen transparent ergibt Alpha 0,85 (die Glas-Unschärfe bleibt) */
   --leiste-bg: color-mix(in srgb, var(--bg-2) 85%, transparent);
@@ -278,7 +280,7 @@ body.blatt-offen #karte { visibility: hidden; }
 body.graphs-offline #graphs .mg-zeit .mg-rel { display: none; }
 
 /* Bausteine (Dateien der Bausteine bleiben unverändert, Anpassungen nur hier) */
-#graphs .mg-btn, #graphs .mg-tab, #start-meteogramm .mg-btn { min-height: var(--tap); min-width: var(--tap); }
+#graphs .mg-btn, #graphs .mg-tab, #start-meteogramm .mg-btn, #graphs .mg-randpfeil, #start-meteogramm .mg-randpfeil { min-height: var(--tap); min-width: var(--tap); }   /* Rand-Pfeil des Bausteins ist nur 36 px hoch */
 /* kein Text unter 11 px (der Baustein setzt 9–10,5 px für Einheiten, Marken und Tagesinfos) */
 /* 0,6875 rem = 11 px bei 16 px Basis, wächst mit der Schriftgröße */
 .mg .mg-ax-titel small, .mg .mg-zeilen-panel h4 small, .mg .mg-svg .mg-mark, .mg .mg-svg .mg-sonne, .mg .mg-svg .mg-tagesinfo, .mg .mg-wv small { font-size: 0.6875rem; }
@@ -295,15 +297,15 @@ body.graphs-offline #graphs .mg-zeit .mg-rel { display: none; }
 /* Querformat (iPhone liegend) */
 @media (orientation: landscape) and (max-height: 500px) {
   :root { --tabbar-breite: 480px; --leiste-hoehe: 44px; --tabbar-unten: max(var(--s1), var(--safe-bottom)); }
-  :root { --kopf-ist: calc(40px + var(--safe-top)); }
-  .kopf { min-height: calc(40px + var(--safe-top)); padding-inline: var(--seite-links) var(--seite-rechts); }
+  :root { --kopf-ist: calc(var(--kopf-quer) + var(--safe-top)); }
+  .kopf { min-height: calc(var(--kopf-quer) + var(--safe-top)); padding-inline: var(--seite-links) var(--seite-rechts); }
   .kopf-knopf { margin-block: -2px; }   /* Tippfläche bleibt 44 px, die Leiste 40 px */
   .kopf-mitte { padding-block: 0; line-height: 1.1; }
   .kopf-ort { font-size: var(--fs-body); }
   .tabbar-huelle .tabbar button { flex-direction: row; gap: var(--s2); }
   .tabbar-huelle .tabbar { padding: 0 var(--s1); }
   .blatt-kopf { min-block-size: 40px; }
-  #karte.wk { --wk-hoehe: calc(100dvh - var(--kopf-ist) - var(--leiste-hoehe) - var(--tabbar-unten) - var(--s8)); min-height: 200px; }
+  #karte.wk { --wk-hoehe: calc(100dvh - var(--kopf-ist) - var(--leiste-hoehe) - var(--tabbar-unten) - var(--s8)); min-height: var(--karte-min); }
 }
 
 /* Große Schrift (data-schrift setzt app.js nach der gemessenen Schriftgröße) */

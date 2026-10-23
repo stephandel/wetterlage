@@ -459,11 +459,13 @@ test('Ortszeit: Offset aus der Zeitzone zum jeweiligen Zeitpunkt (Zeitumstellung
   assert.strictEqual(WL.offsetFuer(undefined, nach, 7200), 7200, 'ohne Zeitzone: Ersatz');
   assert.strictEqual(WL.offsetFuer('Gibt/Esnicht', nach, 3600), 3600, 'ungültige Zeitzone: Ersatz');
 });
-test('Ortszeit: Module rechnen „jetzt“ mit dem Offset der Zeitzone, nicht dem alten Abrufwert', () => {
+test('Ortszeit: Zeitstrings der Antwort gelten mit dem festen Abruf-Offset, echte Zeitpunkte mit dem Offset der Zone zum Ereignis', () => {
   const d = daten({ jetzt: Date.UTC(2026, 9, 25, 2, 30) }); d.forecast.timezone = 'Europe/Berlin'; d.forecast.utc_offset_seconds = 7200;
   const c = containerStub(); Module.rendern(c, d, { oeffneReiter() { }, nochmal() { } });
   assert.ok(c.innerHTML.includes('class="kachel k-stunden'), 'Rendern ok');
-  assert.strictEqual(Module.offsetVon(d), 3600, 'offsetVon');
+  assert.strictEqual(Module.offsetVon(d), 7200, 'offsetVon: fester Offset der Antwort');
+  assert.strictEqual(Module.zeitOffset(d, Date.UTC(2026, 9, 25, 2, 30)), 3600, 'Zone nach der Umstellung');
+  assert.strictEqual(Module.zeitOffset(d, Date.UTC(2026, 9, 24, 12, 0)), 7200, 'Zone vor der Umstellung');
 });
 test('Ortssuche: Treffer sortieren – DE zuerst, dann Europa, dann Rest, innen Reihenfolge behalten, höchstens 8', () => {
   const t = (n, cc) => ({ name: n, country_code: cc });
@@ -472,6 +474,128 @@ test('Ortssuche: Treffer sortieren – DE zuerst, dann Europa, dann Rest, innen 
   eq(r.map((x) => x.name + x.country_code), ['HamburgDE', 'Hamburg2DE', 'HambourgFR', 'HamburgGB', 'HamburgAT', 'HamburgUS', 'BuhlerUS', 'HamburgoBR']);
   eq(WL.trefferSortieren(null, 8), []);
   assert.strictEqual(WL.trefferSortieren(liste).length, 8);
+});
+
+
+// ---------- Korrekturlauf 3, Paket E ----------
+console.log('Paket E');
+// E2: Open-Meteo rechnet die ganze Antwort mit EINEM Offset (utc_offset_seconds des Abrufs), auch über die Zeitumstellung
+function umstellungsDaten(jetzt) {
+  const d = daten({ jetzt: jetzt });
+  const zeiten = [], temps = [];
+  for (let i = 0; i < 72; i++) { const x = new Date(Date.UTC(2026, 9, 24) + i * 36e5); zeiten.push(x.getUTCFullYear() + '-' + p2(x.getUTCMonth() + 1) + '-' + p2(x.getUTCDate()) + 'T' + p2(x.getUTCHours()) + ':00'); temps.push(x.getUTCHours()); }
+  const h = d.forecast.hourly; ['temperature_2m', 'apparent_temperature', 'relative_humidity_2m', 'dew_point_2m', 'precipitation_probability', 'precipitation', 'weather_code', 'pressure_msl', 'cloud_cover', 'wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m', 'uv_index', 'is_day', 'sunshine_duration'].forEach((k) => { h[k] = zeiten.map(() => h[k][0]); });
+  h.time = zeiten; h.temperature_2m = temps;
+  const dt = ['2026-10-24', '2026-10-25', '2026-10-26'], dl = d.forecast.daily;
+  Object.keys(dl).forEach((k) => { dl[k] = dt.map((x, i) => k === 'time' ? x : k === 'sunrise' ? x + 'T07:50' : k === 'sunset' ? x + 'T18:30' : dl[k][0]); });
+  d.forecast.timezone = 'Europe/Berlin'; d.forecast.utc_offset_seconds = 7200;
+  return d;
+}
+test('E2 Zeitumstellung: „jetzt“ So. 25.10. 15:30 MEZ zeigt auf den String 16:00 der +2-Zählung, nicht auf 15:00', () => {
+  const d = umstellungsDaten(Date.UTC(2026, 9, 25, 14, 30));
+  const idx = rechnen.stundenIndizes(d.forecast.hourly, Module.offsetVon(d), d.jetztMs);
+  assert.strictEqual(d.forecast.hourly.time[idx[0] - 6], '2026-10-25T16:00', 'Index-Zeit');
+  const c = containerStub(); Module.rendern(c, d, { oeffneReiter() { }, nochmal() { } });
+  assert.ok(/<p class="std-zeit">22 Uhr<\/p>/.test(c.innerHTML), 'erste Stundenspalte 22 Uhr (nicht 21)');
+  assert.ok(/class="aktuell-label">Aktuell/.test(c.innerHTML));
+});
+test('E2 Zeitumstellung: Warnung bis So. 09:00 UTC erscheint als „bis So. 10:00“ (MEZ), nicht 11:00', () => {
+  const w = Object.assign({}, WARN, { id: 901, onset: '2026-10-24T08:00:00+00:00', expires: '2026-10-25T09:00:00+00:00' });
+  const d = umstellungsDaten(Date.UTC(2026, 9, 24, 10, 0)); d.warnungen = [w];
+  const c = containerStub(); Module.rendern(c, d, { oeffneReiter() { }, nochmal() { } });
+  assert.ok(c.innerHTML.includes('bis So. 10:00'), 'Einzeiler: ' + (/warn-kurz">([^<]*)</.exec(c.innerHTML) || [])[1]);
+  assert.ok(c.innerHTML.includes('Sa. 10:00 Uhr bis So. 10:00 Uhr'), 'Zeitraum: Sa. 10:00 (MESZ) bis So. 10:00 (MEZ)');
+  eq(rechnen.warnKurz(w, Module.zeitOffsetFn(d)).split(' · ').pop(), 'bis So. 10:00');
+});
+test('E2 Zeitumstellung: Gezeiten über die Umstellung: Uhrzeit in MEZ, „(morgen)“ nach Ortsdatum (Berlin)', () => {
+  const T3 = umstellungsDaten(0).forecast.hourly.time;
+  const spitze = 24 + 4.5;   // Flut bei String 04:30 am 25.10. (+2-Zählung) = 02:30 UTC = 03:30 MEZ
+  const v = T3.map((t, i) => 1.5 * Math.cos(2 * Math.PI * (i - spitze) / 12.42));
+  const d = umstellungsDaten(Date.UTC(2026, 9, 24, 20, 0)); d.ort.meer = true; d.meer = { hourly: { time: T3, sea_level_height_msl: v } };
+  const t = rechnen.tipps(d).find((x) => x.id === 'gezeiten');
+  assert.ok(t, 'Gezeiten-Tipp fehlt');
+  const m = /Flut um (\d\d):(\d\d) Uhr \(morgen\)/.exec(t.text);
+  assert.ok(m && m[1] === '03', 'Flut 03:xx (morgen) erwartet: ' + t.text);
+});
+test('E2 Gezeiten „(morgen)“ auch mit Atlantic/Canary (Corralejo)', () => {
+  const v = T.map((t, i) => 1.5 * Math.sin(2 * Math.PI * (i - 24.25 + 3.105) / 12.42)), m = { hourly: { time: T, sea_level_height_msl: v } };
+  const d = daten({ meer: true, marine: m, jetzt: Date.UTC(2026, 9, 23, 14, 10) - 3600 * 1000 }); d.forecast.timezone = 'Atlantic/Canary'; d.forecast.utc_offset_seconds = 3600;
+  const t = rechnen.tipps(d).find((x) => x.id === 'gezeiten');
+  assert.ok(/Flut um 00:\d\d Uhr \(morgen\)/.test(t.text), t.text);
+  assert.ok(/^(Ebbe|Flut) um 1[4-9]:\d\d Uhr, /.test(t.text), t.text);
+});
+
+// E3: Warntitel aus Tabelle
+const WARN_TAB = [
+  ['WINDBÖEN', 'Windböen', 'Windböen'], ['STURMBÖEN', 'Sturmböen', 'Sturmböen'], ['SCHWERE STURMBÖEN', 'Schwere Sturmböen', 'schweren Sturmböen'],
+  ['ORKANARTIGE BÖEN', 'Orkanartige Böen', 'orkanartigen Böen'], ['ORKANBÖEN', 'Orkanböen', 'Orkanböen'], ['EXTREME ORKANBÖEN', 'Extreme Orkanböen', 'extremen Orkanböen'],
+  ['GEWITTER', 'Gewitter', 'Gewitter'], ['STARKES GEWITTER', 'Starkes Gewitter', 'starkem Gewitter'], ['SCHWERES GEWITTER', 'Schweres Gewitter', 'schwerem Gewitter'], ['EXTREMES GEWITTER', 'Extremes Gewitter', 'extremem Gewitter'],
+  ['STARKREGEN', 'Starkregen', 'Starkregen'], ['HEFTIGER STARKREGEN', 'Heftiger Starkregen', 'heftigem Starkregen'], ['EXTREM HEFTIGER STARKREGEN', 'Extrem heftiger Starkregen', 'extrem heftigem Starkregen'],
+  ['DAUERREGEN', 'Dauerregen', 'Dauerregen'], ['ERGIEBIGER DAUERREGEN', 'Ergiebiger Dauerregen', 'ergiebigem Dauerregen'], ['EXTREM ERGIEBIGER DAUERREGEN', 'Extrem ergiebiger Dauerregen', 'extrem ergiebigem Dauerregen'],
+  ['SCHNEEFALL', 'Schneefall', 'Schneefall'], ['STARKER SCHNEEFALL', 'Starker Schneefall', 'starkem Schneefall'], ['EXTREM STARKER SCHNEEFALL', 'Extrem starker Schneefall', 'extrem starkem Schneefall'], ['SCHNEEVERWEHUNG', 'Schneeverwehung', 'Schneeverwehung'],
+  ['GLÄTTE', 'Glätte', 'Glätte'], ['GLATTEIS', 'Glatteis', 'Glatteis'], ['FROST', 'Frost', 'Frost'], ['STRENGER FROST', 'Strenger Frost', 'strengem Frost'], ['NEBEL', 'Nebel', 'Nebel'],
+  ['HITZE', 'Hitze', 'Hitze'], ['STARKE HITZE', 'Starke Hitze', 'starker Hitze'], ['EXTREME HITZE', 'Extreme Hitze', 'extremer Hitze'],
+  ['UV-INDEX', 'UV-Index', 'UV-Index'], ['ERHÖHTE UV-INTENSITÄT', 'Erhöhte UV-Intensität', 'erhöhter UV-Intensität'], ['TAUWETTER', 'Tauwetter', 'Tauwetter'], ['STURM', 'Sturm', 'Sturm'], ['ORKAN', 'Orkan', 'Orkan']
+];
+test('E3 Warnnamen: Tabelle liefert Nominativ (Einzeiler) und Dativ nach „vor“ (Titel) für alle gängigen DWD-Namen', () => {
+  WARN_TAB.forEach(([dwd, nom, dat]) => {
+    const w = { event_de: dwd };
+    assert.strictEqual(rechnen.warnArt(w), nom, dwd + ' Nominativ');
+    assert.strictEqual(rechnen.warnTitel(w), 'Warnung vor ' + dat, dwd + ' Titel');
+  });
+  assert.strictEqual(rechnen.warnArt({ event_de: ' Starkes  Gewitter ' }), 'Starkes Gewitter', 'Groß-/Kleinschreibung und Leerraum egal');
+});
+test('E3 Warnnamen: Zusätze „mit …“ bleiben erhalten, Hauptwörter groß', () => {
+  const w = { event_de: 'SCHWERES GEWITTER mit EXTREMEN ORKANBÖEN, HEFTIGEM STARKREGEN und HAGEL' };
+  assert.strictEqual(rechnen.warnArt(w), 'Schweres Gewitter mit extremen Orkanböen, heftigem Starkregen und Hagel');
+  assert.strictEqual(rechnen.warnTitel(w), 'Warnung vor schwerem Gewitter mit extremen Orkanböen, heftigem Starkregen und Hagel');
+  assert.strictEqual(rechnen.warnTitel({ event_de: 'STARKES GEWITTER mit ORKANBÖEN' }), 'Warnung vor starkem Gewitter mit Orkanböen');
+});
+test('E3 Warnnamen: unbekannter Name → Wörter groß geschrieben, Titel „Wetterwarnung: …“ ohne „vor“; leer → „Wetter“', () => {
+  assert.strictEqual(rechnen.warnArt({ event_de: 'SELTSAMES NEUES PHÄNOMEN' }), 'Seltsames Neues Phänomen');
+  assert.strictEqual(rechnen.warnTitel({ event_de: 'SELTSAMES NEUES PHÄNOMEN' }), 'Wetterwarnung: Seltsames Neues Phänomen');
+  assert.strictEqual(rechnen.warnTitel({ event: 'wind gusts' }), 'Wetterwarnung: Wind Gusts');
+  assert.strictEqual(rechnen.warnArt({}), 'Wetter');
+  assert.strictEqual(rechnen.warnTitel({}), 'Wetterwarnung');
+  const c = containerStub(); Module.rendern(c, daten({ warnungen: [Object.assign({}, WARN, { event_de: 'STARKES GEWITTER' })] }), {});
+  assert.ok(c.innerHTML.includes('Warnung vor starkem Gewitter') && c.innerHTML.includes('Starkes Gewitter'), 'Titel und Einzeiler im HTML');
+});
+
+// E4: Regenradar ohne Daten, Stand mit Tag
+function mini2(werte, datum, start) { const o = { time: [], precipitation: [] }; werte.forEach((v, i) => { const m = start + i * 15; o.time.push(datum + 'T' + p2(Math.floor(m / 60)) + ':' + p2(m % 60)); o.precipitation.push(v); }); return o; }
+test('E4 Regenradar: nur null-Werte → „keine Regendaten“, nicht „bleibt es trocken“; keine Balken', () => {
+  const r = rechnen.regenSatz(mini(new Array(12).fill(null)), OFF, { ms: J });
+  assert.strictEqual(r.satz, 'Für die nächsten 2 Stunden liegen keine Regendaten vor');
+  assert.strictEqual(r.werte.length, 0, 'keine Balken');
+  const d = volleDaten(); d.forecast.minutely_15 = mini(new Array(12).fill(null));
+  const c = containerStub(); Module.rendern(c, d, { oeffneReiter() { }, nochmal() { } });
+  assert.ok(c.innerHTML.includes('Für die nächsten 2 Stunden liegen keine Regendaten vor'), 'Satz im HTML');
+  assert.ok(!c.innerHTML.includes('bleibt es trocken') && !c.innerHTML.includes('class="balken '), 'weder „trocken“ noch Balken');
+  const ok2 = rechnen.regenSatz(mini([null, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), OFF, { ms: J });
+  assert.strictEqual(ok2.satz, 'Die nächsten 2 Stunden bleibt es trocken', 'einzelne Lücken bleiben trocken');
+});
+test('E4 Regenradar: Daten älter als 24 h nennen den Tag („Stand Fr. 05:30: …“)', () => {
+  const alt = mini2(new Array(12).fill(0), '2026-10-23', 4 * 60 + 30);
+  const r = rechnen.regenSatz(alt, OFF, { ms: lokal(12, 0, 24) });
+  assert.strictEqual(r.stand, 'Fr. 05:30'); assert.strictEqual(r.satz, 'Stand Fr. 05:30: Die nächsten 2 Stunden bleibt es trocken');
+  const jung = rechnen.regenSatz(alt, OFF, { ms: lokal(12, 0, 23) });
+  assert.strictEqual(jung.stand, '05:30', 'unter 24 h ohne Tag');
+});
+
+// E5: abgelaufene Einträge der Weg-Liste beim Rendern aufräumen
+test('E5 Weg-Liste: abgelaufene Einträge werden beim Rendern aus dem Speicher entfernt', () => {
+  WL.merk('warnung-weg', [{ id: '1', expires: '2026-10-22T10:00:00Z' }, { id: '2', expires: '2026-10-30T10:00:00Z' }]);
+  const c = containerStub(); Module.rendern(c, daten({ warnungen: [WARN] }), {});
+  eq(WL.merk('warnung-weg').map((x) => x.id), ['2']);
+  WL.merk('warnung-weg', null);
+});
+
+// E6: keine harten Werte neben den Variablen (Abstände, Streifen, Kartenhöhe)
+test('E6 CSS: keine harten px-Werte bei Streifen, Abständen und Kartenhöhe in module.css', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'module.css'), 'utf8').split('\n');
+  const treffer = [];
+  css.forEach((z, i) => { const o = z.replace(/\/\*.*?\*\//g, ''); if (/^\s*--/.test(o)) return; if (/inset\s+\d+px|gap:\s*\d+px|padding:[^;}]*\b\d+px|min-height:\s*\d+px/.test(o)) treffer.push((i + 1) + ': ' + z.trim().slice(0, 90)); });
+  assert.deepStrictEqual(treffer, []);
 });
 
 console.log('\n' + ok + ' bestanden, ' + fail + ' fehlgeschlagen');

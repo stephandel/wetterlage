@@ -17,6 +17,9 @@
   --balken-hoehe: 40px;
   --linie: 2px;
   --balken-heute: 4px;
+  --warn-streifen: 4px;
+  --abstand-eng: 2px;   /* enger Abstand zwischen den Stunden-Zeilen und in der dichten Tagesliste, kleiner als --s1 */
+  --karte-hoch: 150px;
   --sonne-marke: var(--orange);
   --mond-licht: color-mix(in srgb, var(--gelb) 40%, var(--bg-2));   /* hell: Lichtseite getönt, damit sie sich von der Kachel abhebt */
   /* Tagesname und Höchstwert: --akzent-2 hielte auf der zweiten Tagesfarbe (--tag-b) hell nur 4,2:1, darum 15 % zu --label (dunkel unverändert) */
@@ -95,10 +98,10 @@
 /* ---------- Warnung ---------- */
 .k-warnung { color: var(--label); padding: 0; overflow: hidden; }
 .k-warnung .fuss, .warn-meta { color: var(--label); }
-.warn-1 { background: var(--warn-1); box-shadow: inset 4px 0 0 var(--gelb); }
-.warn-2 { background: var(--warn-2); box-shadow: inset 4px 0 0 var(--orange); }
-.warn-3 { background: var(--warn-3); box-shadow: inset 4px 0 0 var(--rot); }
-.warn-4 { background: var(--warn-4); box-shadow: inset 4px 0 0 var(--rot); }
+.warn-1 { background: var(--warn-1); box-shadow: inset var(--warn-streifen) 0 0 var(--gelb); }
+.warn-2 { background: var(--warn-2); box-shadow: inset var(--warn-streifen) 0 0 var(--orange); }
+.warn-3 { background: var(--warn-3); box-shadow: inset var(--warn-streifen) 0 0 var(--rot); }
+.warn-4 { background: var(--warn-4); box-shadow: inset var(--warn-streifen) 0 0 var(--rot); }
 .warn-zeile { display: flex; align-items: center; gap: var(--s3); width: 100%; min-height: var(--tap); padding: var(--s2) var(--s4); text-align: start; color: inherit; font-size: var(--fs-subhead); font-weight: 600; line-height: 1.25; }
 .warn-zeile .warn-kurz { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .warn-sym, .warn-chev { flex: none; display: inline-flex; }
@@ -139,7 +142,7 @@
 .wind-wert { font-size: var(--fs-subhead); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .boeen { display: flex; flex-direction: column; margin-inline-start: auto; text-align: right; font-size: var(--fs-footnote); line-height: 1.2; color: var(--label-2); white-space: nowrap; }
 .boeen .zahl { color: var(--label); }
-.ansicht-radar { justify-content: center; --karte-hoehe: 150px; }
+.ansicht-radar { justify-content: center; --karte-hoehe: var(--karte-hoch); }
 .ansicht-radar .karte-box { margin-top: 0; }
 
 /* ---------- Karten ---------- */
@@ -157,7 +160,7 @@
 
 /* ---------- Stunden ---------- */
 .stunden { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
-.std { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; min-width: 0; }
+.std { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--abstand-eng); min-width: 0; }
 .std + .std { border-inline-start: 1px solid var(--trenner); }
 .std-zeit { font-size: var(--fs-subhead); font-weight: 600; }
 .std-text { font-size: var(--fs-footnote); color: var(--label-2); }
@@ -178,7 +181,7 @@
 .k-tage { padding-inline: 0; padding-bottom: 0; overflow: hidden; }
 .k-tage .kachel-kopf { padding-inline: var(--s4); margin-bottom: var(--s1); }
 .liste.tage { --tage-spalten: minmax(min-content, 1.2fr) repeat(5, auto); display: grid; grid-template-columns: var(--tage-spalten); justify-content: space-between; column-gap: var(--s2); border-radius: 0; background: none; }
-.liste.tage > .tag { display: grid; grid-template-columns: var(--tage-spalten); grid-column: 1 / -1; align-items: center; justify-content: space-between; column-gap: var(--s2); padding: 2px var(--s3); line-height: 1.15;   /* knapp, damit acht Tage unter der Höhengrenze (50 % des Bildschirms) bleiben */ font-variant-numeric: tabular-nums; }
+.liste.tage > .tag { display: grid; grid-template-columns: var(--tage-spalten); grid-column: 1 / -1; align-items: center; justify-content: space-between; column-gap: var(--s2); padding: var(--abstand-eng) var(--s3); line-height: 1.15;   /* knapp, damit acht Tage unter der Höhengrenze (50 % des Bildschirms) bleiben */ font-variant-numeric: tabular-nums; }
 @supports (grid-template-columns: subgrid) { .liste.tage > .tag { grid-template-columns: subgrid; } }
 .tag.heute { box-shadow: inset var(--balken-heute) 0 0 var(--akzent-2); }
 .t-tag { display: flex; flex-direction: column; min-width: 0; }
@@ -194,7 +197,7 @@
 .t-sr .pop { color: var(--label-2); white-space: nowrap; }
 .t-luft { display: flex; flex-direction: column; align-items: center; }
 .t-luft .luft-wort { line-height: 1.1; }   /* ab Tag 6 leer, die Zelle hält das Raster */
-.fuss-tage { margin: 0; padding: 2px var(--s4) var(--s1); line-height: 1.1; }
+.fuss-tage { margin: 0; padding: var(--abstand-eng) var(--s4) var(--s1); line-height: 1.1; }
 .luft-wort { font-size: var(--fs-caption); }
 .t-wind { display: flex; flex-direction: column; font-size: var(--fs-footnote); }   /* Zahl und Einheit zusammen, Richtung darunter */
 .nowrap { white-space: nowrap; }
@@ -266,7 +269,7 @@
 .balken i { display: block; width: 100%; border-radius: var(--s1) var(--s1) 0 0; background: var(--akzent); height: var(--hoehe); }
 .balken.trocken i { height: var(--linie); border-radius: 0; background: var(--trenner); }
 .balken-achse { display: flex; justify-content: space-between; margin-top: var(--s1); font-size: var(--fs-caption); color: var(--label-2); }
-.karte-hoch { min-height: 150px; flex: none; }
+.karte-hoch { min-height: var(--karte-hoch); flex: none; }
 .balken-reihe.trocken-ganz { height: var(--s3); }   /* alles trocken: nur eine Linie, keine Leerfläche über den Strichen */
 .legende { list-style: none; margin: var(--s3) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); font-size: var(--fs-footnote); }
 .legende li { display: inline-flex; align-items: center; gap: var(--s2); }

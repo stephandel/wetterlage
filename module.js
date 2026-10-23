@@ -16,8 +16,20 @@
   function zahlDe(v, d) { if (v == null || isNaN(v)) return '–'; var f = Math.pow(10, d || 0); return String(Math.round(v * f) / f).replace('.', ','); }
   function num(v) { return v != null && !isNaN(v) ? +v : null; }
   function jetztMs(daten) { return daten && daten.jetztMs != null ? daten.jetztMs : Date.now(); }
-  // UTC-Abstand des Orts für „jetzt“: aus der Zeitzone (Zeitumstellung), ersatzweise der Wert des Abrufs
-  function offsetVon(daten) { return daten && daten.forecast ? WL.ortsOffset(daten.forecast, jetztMs(daten)) : 0; }
+  // Fester UTC-Abstand der ganzen Antwort (utc_offset_seconds des Abrufs): in ihm liegen alle Zeitstrings (hourly, daily, minutely), auch über die Zeitumstellung hinweg.
+  // Für „jetzt“ in diesen Strings, Stundenindizes und Tage; ersatzweise der Wert der Zeitzone
+  function offsetVon(daten) {
+    var f = daten && daten.forecast;
+    return f ? (f.utc_offset_seconds != null ? f.utc_offset_seconds : WL.ortsOffset(f, jetztMs(daten))) : 0;
+  }
+  // Abstand der Ortszeit zum Zeitpunkt ms (echter Zeitpunkt, Sommer-/Winterzeit der Zeitzone): für jede Uhrzeit, die aus ms angezeigt wird
+  function zeitOffset(daten, ms) {
+    var f = daten && daten.forecast; if (!f) return 0;
+    return WL.offsetFuer(f.timezone, ms == null ? jetztMs(daten) : ms, f.utc_offset_seconds || 0);
+  }
+  function zeitOffsetFn(daten) { return function (ms) { return zeitOffset(daten, ms); }; }
+  // offset darf eine Zahl oder eine Funktion (ms → Sekunden) sein
+  function offAt(offset, ms) { return typeof offset === 'function' ? offset(ms) : (offset || 0); }
   // Index der laufenden Stunde (wie WL.jetztIndex, aber mit wählbarer Uhrzeit für Tests)
   function jetztIdx(zeiten, offset, ms) {
     var j = WL.ortsZeit(offset, ms).iso.slice(0, 13) + ':00';
@@ -27,8 +39,8 @@
   function uhr(iso) { return p2(WL.stundeVon(iso)) + ' Uhr'; }
   function ikon(name, klasse) { return typeof global.Ikon === 'function' ? global.Ikon(name, klasse) : ''; }
   function sym(name) { return typeof global.WetterSymbol === 'function' ? global.WetterSymbol(name) : ''; }
-  function zeitAus(ms, offset) { return WL.ortsZeit(offset, ms).zeit; }
-  function tagZeit(ms, offset) { var o = WL.ortsZeit(offset, ms); return WL.wochentag(o.datum) + ' ' + o.zeit; }
+  function zeitAus(ms, offset) { return WL.ortsZeit(offAt(offset, ms), ms).zeit; }
+  function tagZeit(ms, offset) { var o = WL.ortsZeit(offAt(offset, ms), ms); return WL.wochentag(o.datum) + ' ' + o.zeit; }
   function zahlEinheit(zahl, einheit) { return '<span class="zahl">' + esc(zahl) + '</span>' + (einheit ? ' <span class="einheit">' + esc(einheit) + '</span>' : ''); }
   function windTeile(kmh, einh) { var v = WL.windWert(kmh, einh); return v === null ? '–' : zahlEinheit(v, WL.windEinheit(einh)); }
   function tempAria(c, einh) { var v = WL.tempWert(c, einh); return v === null ? 'unbekannt' : v + ' Grad ' + (einh && einh.temp === 'f' ? 'Fahrenheit' : 'Celsius'); }
@@ -43,12 +55,15 @@
   function regenSatzRoh(minutely, offset, opt) {
     opt = opt || {};
     var zt = (minutely && minutely.time) || [], pr = (minutely && minutely.precipitation) || [];
-    var jetzt = WL.ortsZeit(offset, opt.ms != null ? opt.ms : Date.now());
+    var nowMs = opt.ms != null ? opt.ms : Date.now();
+    // nur null-Werte: nicht „trocken“ behaupten, keine Balken
+    if (!pr.some(function (v) { return num(v) !== null; })) return { werte: [], zeiten: [], nass: [], schnee: !!opt.schnee, satz: 'Für die nächsten 2 Stunden liegen keine Regendaten vor', stand: '', danach: '' };
+    var jetzt = WL.ortsZeit(offset, nowMs);
     var q = jetzt.iso.slice(0, 14) + p2(Math.floor(jetzt.minute / 15) * 15);
     var i0 = 0, i, werte = [], zeiten = [], stand = '';
     for (i = 0; i < zt.length; i++) if (zt[i] <= q) i0 = i;
     // veraltete Daten: ab „jetzt“ bleiben weniger als 8 Werte, dann die letzten 8 zeigen und den Stand nennen
-    if (zt.length >= 8 && zt.length - i0 < 8) { i0 = zt.length - 8; stand = WL.hhmm(zt[i0]); }
+    if (zt.length >= 8 && zt.length - i0 < 8) { i0 = zt.length - 8; stand = (WL.isoZuMs(zt[i0], offset) < nowMs - 24 * 36e5 ? WL.wochentag(zt[i0]) + ' ' : '') + WL.hhmm(zt[i0]); }   // älter als 24 h: mit Wochentag
     for (i = i0; i < zt.length && werte.length < 8; i++) { werte.push(num(pr[i]) || 0); zeiten.push(zt[i]); }
     var nass = werte.map(function (v) { return v >= 0.1; });
     var wort = opt.schnee ? 'Schnee' : 'Regen';
@@ -206,10 +221,10 @@
     if (p < 0.75) return 'Abnehmender Mond';
     return 'Abnehmende Sichel';
   }
-  // ms = Zeitpunkt, lat/lon in Grad, offset = UTC-Abstand des Orts in Sekunden
+  // ms = Zeitpunkt, lat/lon in Grad, offset = UTC-Abstand des Orts in Sekunden (oder Funktion ms → Sekunden, wegen der Zeitumstellung)
   R.mond = function (ms, lat, lon, offset) {
     var ph = mondPhase(ms), prozent = Math.round(ph.anteil * 100), zunehmend = ph.phase < 0.5;
-    var start = WL.isoZuMs(WL.ortsZeit(offset, ms).datum, offset), H0 = 0.133, auf = null, unter = null;
+    var datum = WL.ortsZeit(offAt(offset, ms), ms).datum, start = WL.isoZuMs(datum, offAt(offset, WL.isoZuMs(datum, offAt(offset, ms)))), H0 = 0.133, auf = null, unter = null;
     var prev = mondHoehe(start, lat, lon) - H0;
     for (var t = 10; t <= 2880; t += 10) {   // 2 Tage: liegt ein Ereignis erst nach Mitternacht, steht es als „morgen“ da
       var cur = mondHoehe(start + t * 60000, lat, lon) - H0;
@@ -217,9 +232,9 @@
       if (prev >= 0 && cur < 0 && unter === null) unter = start + (t - 10 + 10 * (prev - 0) / (prev - cur)) * 60000;
       prev = cur;
     }
-    var morgen0 = start + 864e5, ereignisse = [];
-    if (auf !== null) ereignisse.push({ art: 'Mondaufgang', ms: auf, zeit: zeitAus(auf, offset), morgen: auf >= morgen0 });
-    if (unter !== null) ereignisse.push({ art: 'Monduntergang', ms: unter, zeit: zeitAus(unter, offset), morgen: unter >= morgen0 });
+    var ereignisse = [];
+    if (auf !== null) ereignisse.push({ art: 'Mondaufgang', ms: auf, zeit: zeitAus(auf, offset), morgen: WL.ortsZeit(offAt(offset, auf), auf).datum > datum });
+    if (unter !== null) ereignisse.push({ art: 'Monduntergang', ms: unter, zeit: zeitAus(unter, offset), morgen: WL.ortsZeit(offAt(offset, unter), unter).datum > datum });
     ereignisse.sort(function (a, b) { return a.ms - b.ms; });
     return {
       ereignisse: ereignisse,
@@ -228,15 +243,18 @@
       text: 'Mond zu ' + prozent + ' % beleuchtet' + (prozent <= 3 || prozent >= 97 ? '' : ', ' + (zunehmend ? 'zunehmend' : 'abnehmend')),
       aufgangMs: auf, untergangMs: unter,
       aufgang: auf === null ? null : zeitAus(auf, offset), untergang: unter === null ? null : zeitAus(unter, offset),
-      naechste: R.hauptphasen(ms, 2).map(function (x) { var o = WL.ortsZeit(offset, x.ms); return { name: x.name, ms: x.ms, datum: o.datum, text: WL.wochentag(o.datum) + ' ' + WL.datumKurz(o.datum) }; })
+      naechste: R.hauptphasen(ms, 2).map(function (x) { var o = WL.ortsZeit(offAt(offset, x.ms), x.ms); return { name: x.name, ms: x.ms, datum: o.datum, text: WL.wochentag(o.datum) + ' ' + WL.datumKurz(o.datum) }; })
     };
   };
 
   // ---------- Rechnen: Was heute geht ----------
   // Ebbe und Flut: lokale Extrema der nächsten 24 h, Minuten über die Parabel durch drei Stundenwerte verfeinert
-  function gezeiten(meer, offset, ms) {
+  // offset: fester Abstand der Zeitstrings (die Marine-Antwort bringt ihren eigenen); zo (Zahl oder Funktion): Ortszeit-Abstand zum Ereignis für „morgen“, ersatzweise offset
+  function gezeiten(meer, offset, ms, zo) {
     var t = meer && meer.hourly && meer.hourly.time, v = meer && meer.hourly && meer.hourly.sea_level_height_msl, ev = [];
     if (!t || !v) return ev;
+    if (meer.utc_offset_seconds != null) offset = meer.utc_offset_seconds;
+    if (zo == null) zo = offset;
     var i0 = jetztIdx(t, offset, ms);
     for (var i = Math.max(1, i0); i < Math.min(t.length - 1, i0 + 25); i++) {
       var a = num(v[i - 1]), b = num(v[i]), c = num(v[i + 1]);
@@ -246,14 +264,14 @@
       var den = a - 2 * b + c, dx = den ? 0.5 * (a - c) / den : 0;
       dx = Math.max(-1, Math.min(1, dx));
       var em = WL.isoZuMs(t[i], offset) + dx * 36e5;
-      if (em >= ms) ev.push({ art: art, ms: em, morgen: WL.ortsZeit(offset, em).datum > WL.ortsZeit(offset, ms).datum });
+      if (em >= ms) ev.push({ art: art, ms: em, morgen: WL.ortsZeit(offAt(zo, em), em).datum > WL.ortsZeit(offAt(zo, ms), ms).datum });
     }
     return ev;
   }
   R.gezeiten = gezeiten;
 
   R.tipps = function (daten) {
-    var f = daten.forecast, h = f.hourly, d = f.daily, off = offsetVon(daten), ms = jetztMs(daten), einh = daten.einheiten;
+    var f = daten.forecast, h = f.hourly, d = f.daily, off = offsetVon(daten), zo = zeitOffsetFn(daten), ms = jetztMs(daten), einh = daten.einheiten;
     var jetzt = WL.ortsZeit(off, ms), heute = jetzt.datum, nowIso = jetzt.iso, out = [], i;
     var i0 = jetztIdx(h.time, off, ms), iEnde = i0;
     while (iEnde + 1 < h.time.length && h.time[iEnde + 1].slice(0, 10) === heute) iEnde++;
@@ -277,7 +295,7 @@
     }
     if (uvMax !== null && uvMax >= 6) out.push({ id: 'uv', ikon: 'sun', text: 'UV-Index ' + Math.round(uvMax) + ': Sonnencreme und Hut' });
     if (sunset && nowIso < sunset) {
-      out.push({ id: 'golden', ikon: 'sunset', text: 'Goldene Stunde ab ' + zeitAus(WL.isoZuMs(sunset, off) - 45 * 60000, off) + ' Uhr: weiches Licht für Fotos' });
+      out.push({ id: 'golden', ikon: 'sunset', text: 'Goldene Stunde ab ' + zeitAus(WL.isoZuMs(sunset, off) - 45 * 60000, zo) + ' Uhr: weiches Licht für Fotos' });
     }
     if (sunset && sunrise) {
       var vorSonnenaufgang = nowIso < sunrise;
@@ -289,12 +307,12 @@
       }
       if (n && summe / n <= 20) {
         var ab = WL.isoZuMs(sunset, off) + 60 * 60000;
-        out.push({ id: 'sterne', ikon: 'moon', text: !vorSonnenaufgang && ms < ab ? 'Heute Nacht klar: Sterne ab etwa ' + zeitAus(ab, off) + ' Uhr' : 'Heute Nacht klar: gute Sicht auf die Sterne' });
+        out.push({ id: 'sterne', ikon: 'moon', text: !vorSonnenaufgang && ms < ab ? 'Heute Nacht klar: Sterne ab etwa ' + zeitAus(ab, zo) + ' Uhr' : 'Heute Nacht klar: gute Sicht auf die Sterne' });
       }
     }
     if (daten.ort && daten.ort.meer === true && daten.meer) {
-      var ev = gezeiten(daten.meer, off, ms).sort(function (a, b) { return a.ms - b.ms; }).slice(0, 2);
-      if (ev.length) out.push({ id: 'gezeiten', ikon: 'tropfen', text: ev.map(function (e) { return e.art + ' um ' + zeitAus(e.ms, off) + ' Uhr' + (e.morgen ? ' (morgen)' : ''); }).join(', ') });
+      var ev = gezeiten(daten.meer, off, ms, zo).sort(function (a, b) { return a.ms - b.ms; }).slice(0, 2);
+      if (ev.length) out.push({ id: 'gezeiten', ikon: 'tropfen', text: ev.map(function (e) { return e.art + ' um ' + zeitAus(e.ms, zo) + ' Uhr' + (e.morgen ? ' (morgen)' : ''); }).join(', ') });
     }
     out = out.slice(0, 3);
     if (!out.length) out.push({ id: 'nichts', ikon: 'cloudsun', text: 'Heute nichts Besonderes' });
@@ -338,12 +356,42 @@
   var WEG_SCHLUESSEL = 'warnung-weg';
   function warnId(w) { var i = w && (w.id != null ? w.id : w.alert_id); return i == null ? '' : String(i); }
   function warnStufe(w) { return (SEV[w && w.severity] || SEV.minor)[0]; }
-  // Art der Warnung in normaler Schreibweise: „WINDBÖEN“ → „Windböen“
-  R.warnArt = function (w) {
-    var t = String((w && (w.event_de || w.event)) || '').trim().toLowerCase();
-    return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Wetter';
+  // Gängige DWD-Ereignisnamen (event_de, GROSS): [Nominativ für den Einzeiler, Dativ nach „Warnung vor“ für den Titel]
+  var WARN_NAMEN = {};
+  [['Windböen'], ['Sturmböen'], ['Schwere Sturmböen', 'schweren Sturmböen'], ['Orkanartige Böen', 'orkanartigen Böen'], ['Orkanböen'], ['Extreme Orkanböen', 'extremen Orkanböen'],
+    ['Sturm'], ['Orkan'], ['Gewitter'], ['Starkes Gewitter', 'starkem Gewitter'], ['Schweres Gewitter', 'schwerem Gewitter'], ['Extremes Gewitter', 'extremem Gewitter'],
+    ['Starkregen'], ['Heftiger Starkregen', 'heftigem Starkregen'], ['Extrem heftiger Starkregen', 'extrem heftigem Starkregen'],
+    ['Dauerregen'], ['Ergiebiger Dauerregen', 'ergiebigem Dauerregen'], ['Extrem ergiebiger Dauerregen', 'extrem ergiebigem Dauerregen'],
+    ['Schneefall'], ['Starker Schneefall', 'starkem Schneefall'], ['Extrem starker Schneefall', 'extrem starkem Schneefall'],
+    ['Schneeverwehung'], ['Starke Schneeverwehung', 'starker Schneeverwehung'], ['Extreme Schneeverwehung', 'extremer Schneeverwehung'],
+    ['Glätte'], ['Glatteis'], ['Frost'], ['Strenger Frost', 'strengem Frost'], ['Extremer Frost', 'extremem Frost'], ['Nebel'],
+    ['Hitze'], ['Starke Hitze', 'starker Hitze'], ['Extreme Hitze', 'extremer Hitze'], ['UV-Index'], ['Erhöhte UV-Intensität', 'erhöhter UV-Intensität'], ['Tauwetter']
+  ].forEach(function (x) { WARN_NAMEN[x[0].toUpperCase()] = [x[0], x[1] || x[0]]; });
+  // Hauptwörter in Zusätzen „mit …“ (Rest bleibt klein: Adjektive, „und“)
+  var WARN_NOMEN = ['böen', 'orkanböen', 'sturmböen', 'windböen', 'starkregen', 'hagel', 'regen', 'schnee', 'schneefall', 'gewitter', 'frost', 'glätte', 'glatteis', 'nebel', 'hitze', 'sturm', 'orkan'];
+  function wortGross(w) { return w.charAt(0).toUpperCase() + w.slice(1); }
+  // unbekannter Name: jedes Wort groß, Rest klein („STARKES GEWITTER“ → „Starkes Gewitter“)
+  function warnGross(t) {
+    return t.toLowerCase().replace(/[a-zäöüß]+/g, function (w, i) { return i > 0 && /^(und|mit|oder|bei|von)$/.test(w) ? w : wortGross(w); });
+  }
+  // → { nom, dat } (dat null bei unbekanntem Namen) oder null ohne Angabe
+  function warnName(w) {
+    var roh = String((w && (w.event_de || w.event)) || '').replace(/\s+/g, ' ').trim();
+    if (!roh) return null;
+    var ganz = WARN_NAMEN[roh.toUpperCase()];
+    if (ganz) return { nom: ganz[0], dat: ganz[1] };
+    var m = /^(.+?) mit (.+)$/i.exec(roh), kopf = m && WARN_NAMEN[m[1].toUpperCase()];
+    if (!kopf) return { nom: warnGross(roh), dat: null };
+    var zusatz = m[2].toLowerCase().replace(/[a-zäöüß]+/g, function (x) { return WARN_NOMEN.indexOf(x) >= 0 ? wortGross(x) : x; });
+    return { nom: kopf[0] + ' mit ' + zusatz, dat: kopf[1] + ' mit ' + zusatz };
+  }
+  // Art der Warnung in normaler Schreibweise: „WINDBÖEN“ → „Windböen“, „STARKES GEWITTER“ → „Starkes Gewitter“
+  R.warnArt = function (w) { var n = warnName(w); return n ? n.nom : 'Wetter'; };
+  // Titel: „Warnung vor starkem Gewitter“; unbekannter Name ohne „vor“: „Wetterwarnung: …“
+  R.warnTitel = function (w) {
+    var n = warnName(w);
+    return !n ? 'Wetterwarnung' : n.dat ? 'Warnung vor ' + n.dat : 'Wetterwarnung: ' + n.nom;
   };
-  R.warnTitel = function (w) { return 'Warnung vor ' + R.warnArt(w); };
   // „bis Sa. 04:00“ (Ortszeit) oder ''
   function warnBis(w, offset) {
     var b = Date.parse(w && w.expires);
@@ -366,6 +414,12 @@
   // Weg-Liste: [{ id, expires }]; abgelaufene (expires < ms) fliegen raus
   R.wegAufraeumen = function (liste, ms) {
     return (Array.isArray(liste) ? liste : []).filter(function (x) { return x && x.id != null && Date.parse(x.expires) >= ms; });
+  };
+  // Weg-Liste aus dem Speicher lesen; abgelaufene Einträge dabei auch aus dem Speicher entfernen
+  R.wegLaden = function (ms) {
+    var roh = WL.merk(WEG_SCHLUESSEL), l = R.wegAufraeumen(roh, ms);
+    if (Array.isArray(roh) && roh.length !== l.length) WL.merk(WEG_SCHLUESSEL, l);
+    return l;
   };
   R.wegMerken = function (liste, w, ms) {
     var id = warnId(w), l = R.wegAufraeumen(liste, ms), e = w && w.expires;
@@ -391,12 +445,12 @@
   function warnSymbol() {
     return '<svg class="ikon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 2.4 17.6A2 2 0 0 0 4.1 20.6h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/></svg>';
   }
-  function wegListe(daten) { return WL.merk(WEG_SCHLUESSEL); }
+  function wegListe(daten) { return R.wegLaden(jetztMs(daten)); }
   // auf: Kachel aufgeklappt zeichnen (nach Tipp auf das ⚠️ in der Kopfleiste)
   function modWarnung(daten, auf) {
     var a = R.warnAuswahl(daten.warnungen, wegListe(daten), jetztMs(daten));
     if (!a.zeigen) return '';
-    var off = offsetVon(daten), erste = a.erste, w = a.weitere, st = SEV[erste.severity] || SEV.minor;
+    var off = zeitOffsetFn(daten), erste = a.erste, w = a.weitere, st = SEV[erste.severity] || SEV.minor;
     function zeitraum(x) {
       var s = Date.parse(x.onset), b = Date.parse(x.expires);
       if (isNaN(s)) return '';
@@ -442,7 +496,7 @@
     else {
       var fr = daten.radar.frames[daten.radar.frames.length - 1];
       radarHtml = '<div class="karte-box"><div class="karte" role="img" aria-label="Radarkarte mit Regen der letzten Aufnahme, Ort ' + esc(daten.ort.name) + '"></div>' +
-        '<span class="karte-zeit">' + esc(zeitAus(fr.time * 1000, off)) + ' Uhr</span><span class="karte-art">Radar</span></div>' +
+        '<span class="karte-zeit">' + esc(zeitAus(fr.time * 1000, zeitOffsetFn(daten))) + ' Uhr</span><span class="karte-art">Radar</span></div>' +
         '<p class="fuss">© OpenStreetMap-Mitwirkende · RainViewer</p>';
     }
     var html = '<div class="aktuell">' +
@@ -549,7 +603,7 @@
     return '<svg class="mond" viewBox="0 0 72 72" aria-hidden="true"><circle class="mond-dunkel" cx="36" cy="36" r="30"/><path class="mond-hell" d="' + pfad + '"/></svg>';
   }
   function modMond(daten) {
-    var off = offsetVon(daten), o = daten.ort, m = R.mond(jetztMs(daten), o.lat, o.lon, off);
+    var o = daten.ort, m = R.mond(jetztMs(daten), o.lat, o.lon, zeitOffsetFn(daten));
     // früheres Ereignis zuerst; fehlt eines in den nächsten 2 Tagen, steht „keiner“ dahinter
     var ereignisse = m.ereignisse.map(function (e) { return '<div><dt>' + e.art + '</dt><dd>' + zahlEinheit(e.zeit, 'Uhr') + (e.morgen ? ' <span class="einheit">morgen</span>' : '') + '</dd></div>'; }).join('');
     if (m.ereignisse.length < 2) ereignisse += '<div><dt>' + (m.aufgang === null ? 'Mondaufgang' : 'Monduntergang') + '</dt><dd>keiner</dd></div>';
@@ -578,6 +632,7 @@
     var f = daten.forecast, off = offsetVon(daten), ms = jetztMs(daten), c = f.current || {};
     var schnee = (c.weather_code >= 71 && c.weather_code <= 77) || c.weather_code === 85 || c.weather_code === 86;
     var rs = R.regenSatz(f.minutely_15, off, { ms: ms, schnee: schnee });
+    var hatWerte = rs.werte.length > 0;
     var balken = rs.werte.map(function (v, i) {
       var cls = rs.nass[i] ? 'regen' : 'trocken', hoehe = R.balkenHoehe(v);
       return '<span class="balken ' + cls + '" style="--hoehe:' + hoehe.toFixed(0) + '%"><i></i></span>';
@@ -590,15 +645,15 @@
     else {
       var fr = daten.radar.frames[daten.radar.frames.length - 1];
       karte = '<div class="karte-box karte-hoch"><div class="karte" role="img" aria-label="Radarkarte mit Regen der letzten Aufnahme, Ort ' + esc(daten.ort.name) + '"></div>' +
-        '<span class="karte-zeit">' + esc(zeitAus(fr.time * 1000, off)) + ' Uhr</span><span class="karte-art">Radar</span>' +
+        '<span class="karte-zeit">' + esc(zeitAus(fr.time * 1000, zeitOffsetFn(daten))) + ' Uhr</span><span class="karte-art">Radar</span>' +
         '<button type="button" class="karte-tipp tippbar" data-aktion="radsat" aria-label="Karte öffnen: Rad/Sat"></button></div>' +
         '<p class="fuss">© OpenStreetMap-Mitwirkende · RainViewer</p>';
     }
     return kachel('k-radar k-gross', 'm-radar', 'Regenradar',
       '<p class="regen-satz">' + esc(rs.satz) + '</p>' +
-      '<div class="balken-feld" role="img" aria-label="' + esc(rs.satz + (rs.stand ? ' (Stand ' + rs.stand + ', Balken je 15 Minuten ab dann)' : '')) + '"><div class="balken-reihe' + (rs.nass.indexOf(true) < 0 ? ' trocken-ganz' : '') + '">' + balken + '</div><div class="balken-achse" aria-hidden="true">' + achse + '</div></div>' +
+      (hatWerte ? '<div class="balken-feld" role="img" aria-label="' + esc(rs.satz + (rs.stand ? ' (Stand ' + rs.stand + ', Balken je 15 Minuten ab dann)' : '')) + '"><div class="balken-reihe' + (rs.nass.indexOf(true) < 0 ? ' trocken-ganz' : '') + '">' + balken + '</div><div class="balken-achse" aria-hidden="true">' + achse + '</div></div>' : '') +
       karte +
-      '<ul class="legende"><li><i class="leicht"></i>leicht</li><li><i class="maessig"></i>mäßig</li><li><i class="stark"></i>stark</li></ul>' +
+      (hatWerte ? '<ul class="legende"><li><i class="leicht"></i>leicht</li><li><i class="maessig"></i>mäßig</li><li><i class="stark"></i>stark</li></ul>' : '') +
       '<div class="radar-fuss">' + (trocken ? '<p class="trocken">' + esc(trocken) + '</p>' : '') + '<button type="button" class="chip tippbar" data-aktion="radsat">Karte öffnen' + ikon('chevron', 'ikon-klein') + '</button></div>');
   }
 
@@ -646,9 +701,11 @@
   var MODUL_NAMEN = { aktuell: 'Aktuell', stunden: 'Stunden', meteogramm: 'Meteogramm', tage: 'Tagesliste', luft: 'Luftqualität', tipps: 'Was heute geht', sonne: 'Sonne', mond: 'Mond', wind: 'Wind', radar: 'Regenradar', pollen: 'Pollen' };
   var M = {};
   M.rechnen = { mond: R.mond, tipps: R.tipps, regenSatz: R.regenSatz, stundenIndizes: R.stundenIndizes, luftTage: R.luftTage, pollenMorgen: R.pollenMorgen, hauptphasen: R.hauptphasen, trockenBis: R.trockenBis, gezeiten: R.gezeiten, balkenHoehe: R.balkenHoehe,
-    warnArt: R.warnArt, warnTitel: R.warnTitel, warnKurz: R.warnKurz, warnTipp: R.warnTipp, warnAuswahl: R.warnAuswahl, wegAufraeumen: R.wegAufraeumen, wegMerken: R.wegMerken, wegEntfernen: R.wegEntfernen };
+    warnArt: R.warnArt, warnTitel: R.warnTitel, warnKurz: R.warnKurz, warnTipp: R.warnTipp, warnAuswahl: R.warnAuswahl, wegAufraeumen: R.wegAufraeumen, wegLaden: R.wegLaden, wegMerken: R.wegMerken, wegEntfernen: R.wegEntfernen };
   M.warnSymbol = warnSymbol;
   M.offsetVon = offsetVon;
+  M.zeitOffset = zeitOffset;
+  M.zeitOffsetFn = zeitOffsetFn;
   M.WEG_SCHLUESSEL = WEG_SCHLUESSEL;
 
   function bind(container, daten, ctx) {
@@ -659,6 +716,9 @@
       var b = ev.target.closest && ev.target.closest('[data-aktion]');
       if (!b) {   // Tipp auf das Diagramm der Meteogramm-Kachel öffnet Graphs; nach einer Wischbewegung (mehr als 8 px) nicht
         var mg = ev.target.closest && ev.target.closest('.k-meteogramm');
+        // Knöpfe und Links des Bausteins (z. B. Rand-Pfeil) behalten ihre eigene Wirkung
+        var knopf = mg && ev.target.closest('button, a, input, select, textarea, [tabindex], [role="button"]');
+        if (knopf && knopf !== mg && mg.contains(knopf)) return;
         if (mg && container.contains(mg) && !(druck && Math.abs(ev.clientX - druck.x) + Math.abs(ev.clientY - druck.y) > 8)) ctx.oeffneReiter('graphs');
         return;
       }

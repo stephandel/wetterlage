@@ -341,6 +341,28 @@ function wahr(b, was) { if (!b) throw new Error(was); }
     await ctx.close();
   });
 
+  await pruefe('9b2 Start-Meteogramm: Knöpfe des Bausteins (Rand-Pfeil, auch per Enter) öffnen Graphs nicht; Rand-Pfeil mindestens 44 × 44 px; Tipp auf die Fläche öffnet weiterhin', async () => {
+    const { ctx, page } = await mockSeite(browser);
+    await page.waitForSelector('#start-meteogramm path.mg-linie', { state: 'attached', timeout: 15000 });
+    await page.waitForTimeout(800);
+    await page.locator('.k-meteogramm').scrollIntoViewIfNeeded();
+    // Rand-Pfeil erscheint nur, wenn „jetzt“ aus dem Bild gescrollt ist: hier erzwungen
+    await page.evaluate(() => document.querySelector('#start-meteogramm .mg-randpfeil-r').classList.add('is-da'));
+    const m = await page.evaluate(() => { const r = document.querySelector('#start-meteogramm .mg-randpfeil-r').getBoundingClientRect(); return { b: r.width, h: r.height, x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    wahr(m.b >= 43.5 && m.h >= 43.5, 'Rand-Pfeil ' + Math.round(m.b) + ' × ' + Math.round(m.h) + ' px');
+    wahr(await page.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return !!e && !!e.closest('.mg-randpfeil-r'); }, [m.x, m.y]), 'Rand-Pfeil verdeckt');
+    await page.mouse.click(m.x, m.y); await page.waitForTimeout(300);
+    gleich(await page.getAttribute('#tab-graphs', 'aria-selected'), 'false', 'Reiter nach Klick auf den Rand-Pfeil');
+    await page.evaluate(() => document.querySelector('#start-meteogramm .mg-randpfeil-r').classList.add('is-da'));
+    await page.focus('#start-meteogramm .mg-randpfeil-r'); await page.keyboard.press('Enter'); await page.waitForTimeout(300);
+    gleich(await page.getAttribute('#tab-graphs', 'aria-selected'), 'false', 'Reiter nach Enter auf dem Rand-Pfeil');
+    gleich(await page.getAttribute('#tab-wetter', 'aria-selected'), 'true', 'Reiter bleibt Wetter');
+    const b = await page.locator('#start-meteogramm').boundingBox();
+    await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); await page.waitForTimeout(400);
+    gleich(await page.getAttribute('#tab-graphs', 'aria-selected'), 'true', 'Reiter nach Tipp auf die Diagrammfläche');
+    await ctx.close();
+  });
+
   for (const [prozent, grenze] of [[100, 0.5], [150, 1]]) {
     await pruefe('9c Höhen-Budget bei ' + prozent + ' % Schrift: keine Kachel in #module höher als ' + (grenze * 100) + ' % von 844 px (Warnung aufgeklappt ausgenommen; Tagesliste bei 150 % nur unter 1,2 Bildschirmen, Stunden bei 150 % unter 700 px)', async () => {
       const { ctx, page } = await mockSeite(browser);
@@ -453,6 +475,18 @@ function wahr(b, was) { if (!b) throw new Error(was); }
       wahr(await page.evaluate(() => { const e = document.getElementById('kopf-stand'); return e.scrollWidth <= e.clientWidth + 1; }), 'Kopfzeile läuft über');
       await ctx.close();
     }
+  });
+
+  await pruefe('12d2 Zeitumstellung: alte Antwort (Abruf-Offset +2) nach der Umstellung → „Stand“ in der Kopfzeile in MEZ (25.10. 03:30 UTC = 04:30), ohne Ortszeit-Zusatz in Berlin', async () => {
+    const { ctx, st } = await mockKontext(browser, { timezoneId: 'Europe/Berlin' });
+    await ctx.clock.setFixedTime(new Date('2026-10-25T03:30:00Z'));
+    const page = await ctx.newPage(); const fehler = [];
+    page.on('pageerror', (e) => fehler.push(e.message));
+    await page.goto('http://localhost:' + PORT + '/', { waitUntil: 'load' });
+    await page.waitForFunction(() => /Stand \d\d:\d\d/.test(document.getElementById('kopf-stand').textContent), null, { timeout: 15000 });
+    gleich((await page.textContent('#kopf-stand')).trim(), 'Stand 04:30', 'Stand-Zeit');
+    gleich(fehler.concat(st.fehler), [], 'Seitenfehler');
+    await ctx.close();
   });
 
   await pruefe('12e Ortssuche: Treffer mit Deutschland zuerst, dann Europa, höchstens 8; Anfrage mit count=20', async () => {
