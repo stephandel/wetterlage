@@ -1,5 +1,5 @@
 /* sw.js – Service Worker: Hülle der App offline bereithalten. Die Build-Nummer erhöht tools/bauen.js. */
-const BUILD = 5;
+const BUILD = 6;
 const CACHE = 'wetterlage-' + BUILD;
 const HUELLE = [
   './', 'index.html', 'base.css', 'tokens.css', 'app.css', 'module.css', 'meteogramm.css',
